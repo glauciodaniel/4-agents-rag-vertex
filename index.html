@@ -1,0 +1,1454 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vector Search</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap");
+      :root {
+        --nav-bg: #0c1929;
+        --nav-hover: #1a365d;
+        --nav-active: #2c5282;
+        --page-bg: #0f172a;
+        --card-bg: #ffffff;
+        --card-border: #e2e8f0;
+        --text-primary: #1e293b;
+        --text-muted: #64748b;
+        --accent: #3b82f6;
+        --accent-light: #93c5fd;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        font-family: "Inter", sans-serif;
+        background: var(--page-bg);
+        color: #e2e8f0;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        overflow: hidden;
+      }
+
+      .app-layout {
+        display: flex;
+        flex: 1;
+        width: 100%;
+        min-height: 0;
+      }
+      .sidebar {
+        width: 260px;
+        min-width: 260px;
+        background: var(--nav-bg);
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 1.5rem 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .sidebar-title {
+        padding: 0 1.25rem 1rem;
+        font-size: 1rem;
+        font-weight: 700;
+        color: #fff;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        margin-bottom: 0.75rem;
+      }
+      .sidebar-sub {
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.5);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 0 1.25rem;
+        margin-bottom: 0.5rem;
+      }
+      .nav-link {
+        display: block;
+        padding: 0.6rem 1.25rem;
+        color: rgba(255, 255, 255, 0.8);
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition:
+          background 0.15s,
+          color 0.15s;
+      }
+      .nav-link:hover {
+        background: var(--nav-hover);
+        color: #fff;
+      }
+      .nav-link.active {
+        background: var(--nav-active);
+        color: var(--accent-light);
+        border-left: 3px solid var(--accent);
+        padding-left: calc(1.25rem - 3px);
+      }
+      .content-area {
+        flex: 1;
+        overflow: auto;
+        background: var(--page-bg);
+        padding: 1.5rem 2rem;
+      }
+      .content-panel {
+        display: none;
+        max-width: 900px;
+        margin: 0 auto;
+      }
+      .content-panel.active {
+        display: block;
+      }
+      .content-panel .panel-card {
+        background: var(--card-bg);
+        color: var(--text-primary);
+        border-radius: 12px;
+        border: 1px solid var(--card-border);
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .chart-container {
+        position: relative;
+        width: 100%;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+        height: 400px;
+        max-height: 400px;
+      }
+      @media (max-width: 640px) {
+        .chart-container {
+          height: 300px;
+        }
+      }
+
+      input[type="range"] {
+        appearance: none;
+        -webkit-appearance: none;
+        background: transparent;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        height: 16px;
+        width: 16px;
+        border-radius: 50%;
+        background: var(--accent);
+        cursor: pointer;
+        margin-top: -6px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+      input[type="range"]::-webkit-slider-runnable-track {
+        width: 100%;
+        height: 4px;
+        cursor: pointer;
+        background: #cbd5e1;
+        border-radius: 2px;
+      }
+      .btn-nav {
+        background-color: var(--nav-bg);
+      }
+      .btn-nav:hover {
+        background-color: var(--nav-hover);
+      }
+      .card-shadow {
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      }
+      .code-block {
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+        background: #1e293b;
+        color: #e2e8f0;
+        padding: 1rem;
+        border-radius: 8px;
+        overflow-x: auto;
+      }
+      .code-block code {
+        color: #94a3b8;
+      }
+      .ref-link {
+        font-size: 0.75rem;
+        color: var(--accent);
+      }
+    </style>
+    <!-- Chosen Palette: Warm Neutrals (Stone) with Amber/Blue accents for semantic highlighting -->
+    <!-- Application Structure Plan: 
+         1. Hero Section: Sets the context of the Vertex AI Interface.
+         2. Concept Intro: Defines "Vectors" using the Movie analogy.
+         3. Interactive Laboratory: The core dashboard. Allows users to manipulate two 2D vectors and see how the 4 distance types change in real-time. This includes a Chart.js visualization.
+         4. Encyclopedia of Distances: Detailed cards explaining Manhattan, Euclidean, Cosine, and Dot Product with the analogies from the text.
+         5. Optimization Section: Explains the "Cosine Warning" and demonstrates Normalization via an interactive toggle within the lab context.
+         6. Summary: Final takeaways.
+    -->
+    <!-- Visualization & Content Choices:
+         - Scatter Plot (Chart.js): To visualize vectors in 2D space (Action vs Comedy) as lines from origin.
+         - Custom Canvas Drawing: Used inside the chart to draw the Manhattan path (L-shape) and Euclidean path (direct line) and Cosine angle arc.
+         - Reactive Metrics Panel: Updates numbers instantly to show the relationship between vector changes and distance values.
+         - Analogy Cards: Use icons and clear typography to present the "Taxi", "Bird", and "Flashlight" analogies.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+  </head>
+  <body>
+    <div class="app-layout">
+      <aside class="sidebar" aria-label="Menu">
+        <div class="sidebar-title">Vector Search</div>
+        <div class="sidebar-sub">Conteúdo</div>
+        <a
+          href="#"
+          class="nav-link active"
+          data-section="intro"
+          onclick="
+            showPanel('intro');
+            return false;
+          "
+          >Introdução</a
+        >
+        <a
+          href="#"
+          class="nav-link"
+          data-section="lab"
+          onclick="
+            showPanel('lab');
+            return false;
+          "
+          >Laboratório</a
+        >
+        <a
+          href="#"
+          class="nav-link"
+          data-section="manhattan"
+          onclick="
+            showPanel('manhattan');
+            return false;
+          "
+          >Manhattan</a
+        >
+        <a
+          href="#"
+          class="nav-link"
+          data-section="euclidean"
+          onclick="
+            showPanel('euclidean');
+            return false;
+          "
+          >Euclidiana</a
+        >
+        <a
+          href="#"
+          class="nav-link"
+          data-section="cosine"
+          onclick="
+            showPanel('cosine');
+            return false;
+          "
+          >Cosseno</a
+        >
+        <a
+          href="#"
+          class="nav-link"
+          data-section="dotproduct"
+          onclick="
+            showPanel('dotproduct');
+            return false;
+          "
+          >Produto Escalar</a
+        >
+        <a
+          href="#"
+          class="nav-link"
+          data-section="otimizacao"
+          onclick="
+            showPanel('otimizacao');
+            return false;
+          "
+          >Otimização</a
+        >
+      </aside>
+      <main class="content-area">
+        <div id="panel-intro" class="content-panel active">
+          <div class="panel-card">
+            <h2 class="text-2xl font-bold text-slate-800 mb-4">
+              Entendendo a "Distância" na IA
+            </h2>
+            <p class="text-slate-600 leading-relaxed mb-6">
+              Ao configurar pesquisa vetorial (ex.: Vertex AI, Pinecone,
+              Milvus), você escolhe <strong>como</strong> o sistema compara
+              vetores. As opções — Euclidiana, Cosseno, Produto Escalar — são
+              <strong>métricas de distância</strong> ou
+              <strong>medidas de similaridade</strong>: fórmulas que, dados dois
+              vetores, retornam um número. Não são tipo de vetor nem um único
+              algoritmo de busca; são a regra usada para ranquear vizinhos. Este
+              material serve como <strong>referência</strong>: fórmulas,
+              exemplos em Python, quando usar e fontes oficiais.
+            </p>
+            <div class="grid md:grid-cols-2 gap-4 mb-6">
+              <div class="p-4 bg-slate-100 border border-slate-200 rounded-xl">
+                <h3 class="font-bold text-slate-800 mb-2">
+                  📐 O que é um <strong>vetor</strong>?
+                </h3>
+                <p class="text-sm text-slate-600">
+                  É a <strong>representação numérica</strong> de um item (filme,
+                  texto, imagem). Uma lista de números que descreve o item em
+                  várias dimensões. Ex.: [Ação=9, Comédia=2]. Os vetores são
+                  gerados por um modelo de embeddings; você não escolhe "tipo de
+                  vetor" na tela de distância.
+                </p>
+              </div>
+              <div class="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                <h3 class="font-bold text-slate-800 mb-2">
+                  📏 O que é <strong>métrica</strong> (Euclidiana, Cosseno,
+                  etc.)?
+                </h3>
+                <p class="text-sm text-slate-600">
+                  É a <strong>fórmula matemática</strong> usada para
+                  <em>comparar</em> dois vetores e obter um número. Define se
+                  "parecidos" = distância pequena ou similaridade grande. Não é
+                  um algoritmo de busca em si: é a regra que o motor usa para
+                  ranquear os vizinhos mais próximos.
+                </p>
+              </div>
+            </div>
+            <p class="text-xs text-slate-500 mb-4">
+              <strong>Onde isso aparece:</strong> Vertex AI Vector Search
+              (<code>distanceMeasureType</code>), scikit-learn (<code
+                >metric=</code
+              >
+              em k-NN e <code>pairwise_distances</code>), bancos vetoriais
+              (Pinecone, Weaviate, etc.).
+            </p>
+            <div
+              class="p-4 bg-blue-50 border border-blue-200 rounded-lg text-slate-700"
+            >
+              <p class="font-semibold text-sm mb-1">🔍 O Cenário:</p>
+              <p class="text-sm">
+                Imagine que a IA precisa saber se o filme
+                <strong>"Duro de Matar"</strong> é parecido com
+                <strong>"Vingadores"</strong>. Ela transforma cada filme em um
+                <strong>vetor</strong> (números) e usa uma
+                <strong>métrica</strong> escolhida por você para medir quão
+                próximos são.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div id="panel-lab" class="content-panel">
+          <div class="panel-card overflow-hidden p-0">
+            <div class="bg-[var(--nav-bg)] text-white p-6">
+              <h3 class="text-2xl font-bold flex items-center gap-2">
+                🧪 Laboratório de Vetores
+              </h3>
+              <p class="text-slate-300 mt-2">
+                Ajuste os valores de "Ação" e "Comédia" para dois filmes e veja
+                como as distâncias mudam em tempo real.
+              </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-0">
+              <!-- CONTROLS -->
+              <div
+                class="lg:col-span-4 p-6 bg-stone-50 border-r border-stone-100 space-y-8"
+              >
+                <!-- Vetor A -->
+                <div class="space-y-4">
+                  <div class="flex items-center justify-between">
+                    <h4
+                      class="font-bold text-amber-600 flex items-center gap-2"
+                    >
+                      🎬 Filme A
+                      <span class="text-xs font-normal text-stone-500"
+                        >(Vetor A)</span
+                      >
+                    </h4>
+                    <span
+                      id="vectorA-display"
+                      class="font-mono text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded"
+                      >[0, 0]</span
+                    >
+                  </div>
+                  <div>
+                    <label
+                      class="text-xs font-semibold text-stone-500 uppercase"
+                      >Nível de Ação (X)</label
+                    >
+                    <input
+                      type="range"
+                      id="ax"
+                      min="0"
+                      max="10"
+                      step="1"
+                      value="9"
+                      class="w-full"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      class="text-xs font-semibold text-stone-500 uppercase"
+                      >Nível de Comédia (Y)</label
+                    >
+                    <input
+                      type="range"
+                      id="ay"
+                      min="0"
+                      max="10"
+                      step="1"
+                      value="2"
+                      class="w-full"
+                    />
+                  </div>
+                </div>
+
+                <hr class="border-stone-200" />
+
+                <!-- Vetor B -->
+                <div class="space-y-4">
+                  <div class="flex items-center justify-between">
+                    <h4 class="font-bold text-blue-600 flex items-center gap-2">
+                      🎬 Filme B
+                      <span class="text-xs font-normal text-stone-500"
+                        >(Vetor B)</span
+                      >
+                    </h4>
+                    <span
+                      id="vectorB-display"
+                      class="font-mono text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded"
+                      >[0, 0]</span
+                    >
+                  </div>
+                  <div>
+                    <label
+                      class="text-xs font-semibold text-stone-500 uppercase"
+                      >Nível de Ação (X)</label
+                    >
+                    <input
+                      type="range"
+                      id="bx"
+                      min="0"
+                      max="10"
+                      step="1"
+                      value="2"
+                      class="w-full"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      class="text-xs font-semibold text-stone-500 uppercase"
+                      >Nível de Comédia (Y)</label
+                    >
+                    <input
+                      type="range"
+                      id="by"
+                      min="0"
+                      max="10"
+                      step="1"
+                      value="8"
+                      class="w-full"
+                    />
+                  </div>
+                </div>
+
+                <div class="bg-yellow-50 p-4 rounded border border-yellow-100">
+                  <h5 class="font-bold text-yellow-800 text-sm mb-2">
+                    ⚡ Otimização
+                  </h5>
+                  <button
+                    id="btn-normalize"
+                    class="w-full btn-nav text-white font-bold py-2 px-4 rounded transition text-sm"
+                  >
+                    Aplicar Normalização (Tamanho = 1)
+                  </button>
+                  <p class="text-xs text-stone-500 mt-2 leading-tight">
+                    Veja o que acontece com o Produto Escalar quando
+                    normalizamos os vetores.
+                  </p>
+                </div>
+              </div>
+
+              <!-- VISUALIZATION -->
+              <div class="lg:col-span-8 p-6 space-y-6">
+                <!-- Chart Wrapper -->
+                <div class="chart-container">
+                  <canvas id="vectorChart"></canvas>
+                </div>
+
+                <!-- Metrics Dashboard -->
+                <p class="text-xs text-stone-500 font-semibold uppercase">
+                  Métricas em tempo real (clique para ir à explicação)
+                </p>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div
+                    class="bg-white p-3 rounded border border-stone-200 card-shadow text-center group hover:border-amber-400 transition cursor-help"
+                    onclick="showPanel('manhattan')"
+                  >
+                    <div class="text-xs text-stone-500 mb-1">
+                      Manhattan (L1)
+                    </div>
+                    <div class="text-[10px] text-amber-600 font-medium">
+                      Métrica de distância
+                    </div>
+                    <div
+                      id="val-manhattan"
+                      class="text-xl font-bold text-stone-800"
+                    >
+                      0.0
+                    </div>
+                    <div class="text-[10px] text-stone-400">
+                      Soma das diferenças
+                    </div>
+                  </div>
+                  <div
+                    class="bg-white p-3 rounded border border-stone-200 card-shadow text-center group hover:border-amber-400 transition cursor-help"
+                    onclick="showPanel('euclidean')"
+                  >
+                    <div class="text-xs text-stone-500 mb-1">
+                      Euclidiana (L2)
+                    </div>
+                    <div class="text-[10px] text-amber-600 font-medium">
+                      Métrica de distância
+                    </div>
+                    <div
+                      id="val-euclidean"
+                      class="text-xl font-bold text-stone-800"
+                    >
+                      0.0
+                    </div>
+                    <div class="text-[10px] text-stone-400">Linha reta</div>
+                  </div>
+                  <div
+                    class="bg-white p-3 rounded border border-stone-200 card-shadow text-center group hover:border-amber-400 transition cursor-help"
+                    onclick="showPanel('cosine')"
+                  >
+                    <div class="text-xs text-stone-500 mb-1">Dist. Cosseno</div>
+                    <div class="text-[10px] text-amber-600 font-medium">
+                      Métrica de distância
+                    </div>
+                    <div
+                      id="val-cosine"
+                      class="text-xl font-bold text-stone-800"
+                    >
+                      0.0
+                    </div>
+                    <div class="text-[10px] text-stone-400">
+                      Ângulo (0 = iguais)
+                    </div>
+                  </div>
+                  <div
+                    class="bg-[var(--nav-bg)] p-3 rounded border border-slate-600 text-center group hover:border-blue-400 transition cursor-help relative overflow-hidden"
+                    onclick="showPanel('dotproduct')"
+                  >
+                    <div class="absolute top-0 right-0 p-1">
+                      <span
+                        id="match-indicator"
+                        class="hidden text-green-400 text-xs font-bold"
+                        >MATCH!</span
+                      >
+                    </div>
+                    <div class="text-xs text-slate-300 mb-1">
+                      Produto Escalar
+                    </div>
+                    <div class="text-[10px] text-blue-200 font-medium">
+                      Medida de similaridade
+                    </div>
+                    <div id="val-dot" class="text-xl font-bold text-white">
+                      0.0
+                    </div>
+                    <div class="text-[10px] text-slate-400">
+                      Maior = mais similar
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="panel-manhattan" class="content-panel">
+          <div class="panel-card">
+            <article class="rounded-xl border border-slate-200">
+              <div class="flex items-center gap-3 mb-2">
+                <div class="bg-stone-100 p-3 rounded-full text-2xl">🚕</div>
+                <div>
+                  <span
+                    class="text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded"
+                    >Métrica de distância</span
+                  >
+                  <h3 class="text-xl font-bold text-stone-800 mt-1">
+                    1. Distância de Manhattan (L1)
+                  </h3>
+                </div>
+              </div>
+              <p class="text-stone-600 mb-4">
+                <strong>O que é:</strong> Métrica de distância (norma L1) que
+                soma o valor absoluto das diferenças em cada dimensão — também
+                chamada <em>city block</em>. É a função usada para comparar dois
+                vetores; não é tipo de vetor nem algoritmo de busca.
+              </p>
+              <p class="text-stone-600 mb-4">
+                <strong>Analogia do taxista.</strong> Em Nova York você não
+                atravessa prédios: anda por quarteirões. A “distância” é a soma
+                dos deslocamentos em cada eixo.
+              </p>
+              <h4 class="font-bold text-stone-800 mt-6 mb-2">Fórmula</h4>
+              <div
+                class="bg-slate-100 p-3 rounded font-mono text-sm text-stone-800 mb-4"
+              >
+                d(a, b) = |a₁ − b₁| + |a₂ − b₂| + … + |aₙ − bₙ| = Σᵢ |aᵢ − bᵢ|
+              </div>
+              <h4 class="font-bold text-stone-800 mt-6 mb-2">
+                Exemplo em Python
+              </h4>
+              <div class="code-block mb-4">
+                <pre>
+import numpy as np
+from sklearn.metrics.pairwise import manhattan_distances
+a = np.array([[9, 2]])
+b = np.array([[2, 8]])
+print(manhattan_distances(a, b)[0, 0])  # 13.0</pre
+                >
+              </div>
+              <h4 class="font-bold text-stone-800 mt-6 mb-2">Quando usar</h4>
+              <div
+                class="bg-amber-50 p-3 rounded text-sm text-amber-900 mb-3 border border-amber-200"
+              >
+                <strong>Exemplo prático — rota em quarteirões:</strong> Você
+                está no ponto (2, 3) e o delivery no (7, 8). Não pode cortar
+                caminho: soma dos blocos na horizontal (5) + na vertical (5) =
+                <strong>10 blocos</strong>. É exatamente a distância de
+                Manhattan. Em jogos de tabuleiro (x, y) ou logística em ruas em
+                grade, L1 modela o deslocamento real.
+              </div>
+              <ul class="text-sm space-y-2 text-stone-600 mb-4">
+                <li>
+                  <strong>•</strong> Grade/ruas, tabuleiros, eixos
+                  independentes.
+                </li>
+                <li>
+                  <strong>•</strong> k-NN:
+                  <code>KNeighborsClassifier(metric='manhattan')</code> — menos
+                  sensível a outliers.
+                </li>
+                <li>
+                  <strong>•</strong> Dados esparsos (scikit-learn suporta).
+                </li>
+                <li>
+                  <strong>•</strong> Evitar para embeddings de texto (preferir
+                  cosseno/produto escalar normalizado).
+                </li>
+              </ul>
+              <p class="text-xs text-stone-500">
+                <strong>Fontes:</strong>
+                <a
+                  href="https://scikit-learn.org/stable/modules/generated/sklearn.metrics.pairwise.manhattan_distances.html"
+                  target="_blank"
+                  rel="noopener"
+                  class="ref-link"
+                  >scikit-learn</a
+                >,
+                <a
+                  href="https://docs.cloud.google.com/vertex-ai/docs/vector-search/configuring-indexes#distance-measure-type"
+                  target="_blank"
+                  rel="noopener"
+                  class="ref-link"
+                  >Vertex AI</a
+                >
+              </p>
+            </article>
+          </div>
+        </div>
+
+        <div id="panel-euclidean" class="content-panel">
+          <div class="panel-card">
+            <article class="rounded-xl border border-slate-200">
+              <div class="flex items-center gap-3 mb-2">
+                <div class="bg-stone-100 p-3 rounded-full text-2xl">🦅</div>
+                <div>
+                  <span
+                    class="text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded"
+                    >Métrica de distância</span
+                  >
+                  <h3 class="text-xl font-bold text-stone-800 mt-1">
+                    2. Distância Euclidiana (L2)
+                  </h3>
+                </div>
+              </div>
+              <p class="text-stone-600 mb-4">
+                <strong>O que é:</strong> Métrica de distância da linha reta
+                entre dois pontos (Teorema de Pitágoras, norma L2). Menor valor
+                = vetores mais próximos. Sensível à escala das features —
+                normalizar ou padronizar antes de usar.
+              </p>
+              <p class="text-stone-600 mb-4">
+                <strong>Analogia do pássaro.</strong> O pássaro voa em linha
+                reta; a distância é o comprimento desse segmento.
+              </p>
+              <h4 class="font-bold text-stone-800 mt-6 mb-2">Fórmula</h4>
+              <div
+                class="bg-slate-100 p-3 rounded font-mono text-sm text-stone-800 mb-4"
+              >
+                d(a, b) = √[(a₁−b₁)² + (a₂−b₂)² + … + (aₙ−bₙ)²] = √(Σᵢ (aᵢ −
+                bᵢ)²)
+              </div>
+              <h4 class="font-bold text-stone-800 mt-6 mb-2">
+                Exemplo em Python
+              </h4>
+              <div class="code-block mb-4">
+                <pre>
+import numpy as np
+from sklearn.metrics.pairwise import euclidean_distances
+
+a = np.array([[9, 2]])
+b = np.array([[2, 8]])
+print(euclidean_distances(a, b)[0, 0])  # ~9.22
+
+# k-NN com L2 (padrão): NearestNeighbors(metric='euclidean')</pre
+                >
+              </div>
+              <h4 class="font-bold text-stone-800 mt-6 mb-2">Quando usar</h4>
+              <div
+                class="bg-blue-50 p-3 rounded text-sm text-blue-900 mb-3 border border-blue-200"
+              >
+                <strong>Exemplo prático — “restaurantes perto de mim”:</strong>
+                Dois pontos no mapa: você em (lat, lon) e cada restaurante em
+                (lat, lon). A distância em <strong>linha reta</strong> (como o
+                pássaro voa) é a Euclidiana. Apps de delivery e mapas usam essa
+                ideia para “mais próximo”. K-Means para agrupar lojas por
+                localização também usa L2: cada loja fica no grupo do centroide
+                mais próximo em linha reta.
+              </div>
+              <ul class="text-sm space-y-2 text-stone-600 mb-4">
+                <li>
+                  <strong>•</strong> k-NN, clustering (K-Means), detecção de
+                  anomalias — padrão em muitos algoritmos.
+                </li>
+                <li>
+                  <strong>•</strong> Dados numéricos em escala similar; fazer
+                  StandardScaler/Normalizer quando as escalas forem diferentes.
+                </li>
+                <li>
+                  <strong>•</strong> Cuidado com texto/embeddings: frase curta
+                  vs longa com mesmo significado podem ficar “distantes”; para
+                  semântica costuma-se usar cosseno ou produto escalar com
+                  vetores normalizados.
+                </li>
+              </ul>
+              <p class="text-xs text-stone-500">
+                <strong>Fontes:</strong>
+                <a
+                  href="https://scikit-learn.org/stable/modules/generated/sklearn.metrics.pairwise.euclidean_distances.html"
+                  target="_blank"
+                  rel="noopener"
+                  class="ref-link"
+                  >scikit-learn</a
+                >,
+                <a
+                  href="https://docs.cloud.google.com/vertex-ai/docs/vector-search/configuring-indexes#distance-measure-type"
+                  target="_blank"
+                  rel="noopener"
+                  class="ref-link"
+                  >Vertex AI (SQUARED_L2_DISTANCE)</a
+                >
+              </p>
+            </article>
+          </div>
+        </div>
+
+        <div id="panel-cosine" class="content-panel">
+          <div class="panel-card">
+            <article
+              class="rounded-xl border border-slate-200 ring-2 ring-blue-200"
+            >
+              <div class="flex items-center gap-3 mb-2">
+                <div class="bg-amber-100 p-3 rounded-full text-2xl">🔭</div>
+                <div>
+                  <span
+                    class="text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded"
+                    >Métrica de distância</span
+                  >
+                  <h3 class="text-xl font-bold text-stone-800 mt-1">
+                    3. Distância do Cosseno
+                  </h3>
+                </div>
+              </div>
+              <p class="text-stone-600 mb-4">
+                <strong>O que é:</strong> Métrica baseada no ângulo entre os
+                vetores: <em>similaridade de cosseno</em> = cos(θ) ∈ [−1, 1];
+                <em>distância do cosseno</em> = 1 − cos(θ) (0 = mesma direção, 2
+                = opostos). Não depende da magnitude — só da direção. Ideal para
+                texto e embeddings semânticos.
+              </p>
+              <p class="text-stone-600 mb-4">
+                <strong>Analogia da direção.</strong> Como apontar para uma
+                estrela: o braço pode ser curto ou longo; o que importa é a
+                direção.
+              </p>
+              <h4 class="font-bold text-stone-800 mt-6 mb-2">Fórmula</h4>
+              <div
+                class="bg-slate-100 p-3 rounded font-mono text-sm text-stone-800 mb-2"
+              >
+                similaridade = (a·b) / (‖a‖ ‖b‖) = cos(θ)
+              </div>
+              <div
+                class="bg-slate-100 p-3 rounded font-mono text-sm text-stone-800 mb-4"
+              >
+                distância = 1 − similaridade
+              </div>
+              <h4 class="font-bold text-stone-800 mt-6 mb-2">
+                Exemplo em Python
+              </h4>
+              <div class="code-block mb-4">
+                <pre>
+from sklearn.metrics.pairwise import cosine_similarity, cosine_distances
+import numpy as np
+
+a = np.array([[9, 2]])
+b = np.array([[2, 8]])
+sim = cosine_similarity(a, b)[0, 0]
+dist = cosine_distances(a, b)[0, 0]  # 1 - sim
+print(f"Similaridade: {sim:.4f}, Distância: {dist:.4f}")</pre
+                >
+              </div>
+              <h4 class="font-bold text-stone-800 mt-6 mb-2">Quando usar</h4>
+              <ul class="text-sm space-y-2 text-stone-600 mb-4">
+                <li>
+                  <strong>•</strong> Busca semântica, RAG, NLP: “Amo cães” e
+                  “Adoro muito os cachorros” — mesma direção, tamanhos
+                  diferentes.
+                </li>
+                <li>
+                  <strong>•</strong> Embeddings de texto (BERT,
+                  sentence-transformers): comparação por significado, não por
+                  tamanho do texto.
+                </li>
+                <li>
+                  <strong>•</strong> Recomendação por conteúdo quando a “força”
+                  do vetor não importa.
+                </li>
+              </ul>
+              <div
+                class="bg-amber-50 p-3 rounded text-sm text-amber-900 mb-3 border border-amber-200"
+              >
+                <strong>Performance:</strong> Exige norma e divisão em tempo de
+                consulta; para milhões de vetores o Vertex AI recomenda
+                <strong>DOT_PRODUCT_DISTANCE + UNIT_L2_NORM</strong> em vez de
+                COSINE_DISTANCE (mesmo ranking, mais rápido). Ver seção
+                Otimização.
+              </div>
+              <p class="text-xs text-stone-500">
+                <strong>Fontes:</strong>
+                <a
+                  href="https://scikit-learn.org/stable/modules/generated/sklearn.metrics.pairwise.cosine_similarity.html"
+                  target="_blank"
+                  rel="noopener"
+                  class="ref-link"
+                  >scikit-learn</a
+                >,
+                <a
+                  href="https://docs.cloud.google.com/vertex-ai/docs/vector-search/configuring-indexes#distance-measure-type"
+                  target="_blank"
+                  rel="noopener"
+                  class="ref-link"
+                  >Vertex AI</a
+                >
+              </p>
+            </article>
+          </div>
+        </div>
+
+        <div id="panel-dotproduct" class="content-panel">
+          <div class="panel-card">
+            <article
+              class="rounded-xl border border-slate-200 ring-2 ring-slate-400"
+            >
+              <div class="flex items-center gap-3 mb-2">
+                <div class="bg-stone-800 text-white p-3 rounded-full text-2xl">
+                  💥
+                </div>
+                <div>
+                  <span
+                    class="text-xs font-semibold text-stone-700 bg-stone-200 px-2 py-0.5 rounded"
+                    >Medida de similaridade</span
+                  >
+                  <h3 class="text-xl font-bold text-stone-800 mt-1">
+                    4. Produto Escalar
+                  </h3>
+                </div>
+              </div>
+              <p class="text-stone-600 mb-4">
+                <strong>O que é:</strong> Medida de <em>similaridade</em> (não
+                distância): a·b = a₁b₁ + a₂b₂ + … + aₙbₙ. Quanto
+                <strong>maior</strong>, mais similares. Considera direção e
+                magnitude. Com vetores normalizados (‖a‖=‖b‖=1), produto escalar
+                = similaridade de cosseno — mesmo ranking, cálculo mais barato.
+              </p>
+              <p class="text-stone-600 mb-4">
+                <strong>Analogia do “high-five”.</strong> Para o “bater” ser
+                forte, precisa da mesma direção e de força (magnitude).
+              </p>
+              <h4 class="font-bold text-stone-800 mt-6 mb-2">Fórmula</h4>
+              <div
+                class="bg-slate-100 p-3 rounded font-mono text-sm text-stone-800 mb-4"
+              >
+                a·b = Σᵢ aᵢbᵢ &nbsp;&nbsp; &nbsp; Se ‖a‖=‖b‖=1 então a·b =
+                cos(θ)
+              </div>
+              <h4 class="font-bold text-stone-800 mt-6 mb-2">
+                Exemplo em Python
+              </h4>
+              <div class="code-block mb-4">
+                <pre>
+import numpy as np
+
+a = np.array([9, 2])
+b = np.array([2, 8])
+dot = np.dot(a, b)
+print(dot)  # 34
+
+# Com normalização L2 = similaridade de cosseno:
+from numpy.linalg import norm
+a_n = a / norm(a)
+b_n = b / norm(b)
+print(np.dot(a_n, b_n))  # igual a cosine_similarity([a],[b])</pre
+                >
+              </div>
+              <h4 class="font-bold text-stone-800 mt-6 mb-2">Quando usar</h4>
+              <div
+                class="bg-slate-100 p-3 rounded text-sm text-slate-800 mb-3 border border-slate-200"
+              >
+                <strong>Exemplo prático — busca semântica em produção:</strong>
+                Você quer o mesmo efeito do cosseno (ex.: perguntas como “Amo
+                cães” retornando respostas sobre cachorros), mas com performance
+                melhor. No Vertex AI (e em outros serviços) você configura
+                <strong>DOT_PRODUCT_DISTANCE</strong> +
+                <strong>UNIT_L2_NORM</strong>: os vetores são normalizados e o
+                produto escalar entre eles dá o mesmo ranking que a similaridade
+                de cosseno, só que calculado mais rápido. É a recomendação
+                oficial do Google para esse cenário.
+              </div>
+              <ul class="text-sm space-y-2 text-stone-600 mb-4">
+                <li>
+                  <strong>•</strong> Busca vetorial em escala (Vertex AI,
+                  Milvus, etc.): com <strong>UNIT_L2_NORM</strong>,
+                  DOT_PRODUCT_DISTANCE = mesmo ranking do cosseno, mais rápido.
+                </li>
+                <li>
+                  <strong>•</strong> Quando a magnitude importa: e.g.
+                  intensidade de preferência em recomendações (vetores não
+                  normalizados).
+                </li>
+                <li>
+                  <strong>•</strong> Implementações otimizadas (SIMD, GPU): só
+                  multiplicações e somas, sem raiz nem divisão.
+                </li>
+              </ul>
+              <p class="text-xs text-stone-500">
+                <strong>Fontes:</strong>
+                <a
+                  href="https://docs.cloud.google.com/vertex-ai/docs/vector-search/configuring-indexes#distance-measure-type"
+                  target="_blank"
+                  rel="noopener"
+                  class="ref-link"
+                  >Vertex AI — DOT_PRODUCT_DISTANCE</a
+                >,
+                <a
+                  href="https://scikit-learn.org/stable/modules/generated/sklearn.metrics.pairwise.cosine_similarity.html"
+                  target="_blank"
+                  rel="noopener"
+                  class="ref-link"
+                  >scikit-learn cosine_similarity</a
+                >
+              </p>
+            </article>
+          </div>
+        </div>
+
+        <div id="panel-otimizacao" class="content-panel">
+          <div
+            class="panel-card bg-[var(--nav-bg)] text-white border-0 p-8 md:p-12 relative overflow-hidden"
+          >
+            <div class="relative z-10 max-w-3xl">
+              <h2 class="text-3xl font-bold mb-6 flex items-center gap-3">
+                <span
+                  class="bg-red-500 text-white text-sm px-2 py-1 rounded font-mono"
+                  >AVISO DO GOOGLE</span
+                >
+                Por que "Não Recomendado"?
+              </h2>
+              <div class="space-y-6 text-slate-300 text-lg">
+                <p>
+                  Se o Cosseno é tão bom para textos, por que o Vertex AI diz
+                  que é
+                  <strong>[altamente não recomendado]</strong>?
+                </p>
+                <p>
+                  A resposta é <strong>Performance</strong>. Calcular o cosseno
+                  para milhões de vetores é lento. Mas existe um
+                  <strong>Truque de Ouro</strong> matemático:
+                </p>
+                <div
+                  class="bg-slate-800 p-6 rounded-lg border-l-4 border-green-500"
+                >
+                  <h4 class="text-green-400 font-bold mb-2">
+                    ✨ O Segredo da Normalização
+                  </h4>
+                  <p class="text-white text-base mb-4">
+                    Se todos os vetores tiverem norma 1 (normalização L2), o
+                    <strong>Produto Escalar</strong> é igual à
+                    <strong>Similaridade de Cosseno</strong>. O ranking de
+                    resultados é idêntico; a diferença é de performance.
+                  </p>
+                  <p class="text-slate-300 text-sm italic mb-4">
+                    Documentação Vertex AI: “We strongly suggest using
+                    DOT_PRODUCT_DISTANCE + UNIT_L2_NORM instead of the COSINE
+                    distance. Our algorithms have been more optimized for the
+                    DOT_PRODUCT distance, and when combined with UNIT_L2_NORM,
+                    it offers the same ranking and mathematical equivalence as
+                    the COSINE distance.”
+                  </p>
+                  <p class="text-white text-sm">
+                    <strong>Fonte:</strong>
+                    <a
+                      href="https://docs.cloud.google.com/vertex-ai/docs/vector-search/configuring-indexes#distance-measure-type"
+                      target="_blank"
+                      rel="noopener"
+                      class="text-blue-300 hover:underline"
+                      >Vertex AI — DistanceMeasureType</a
+                    >
+                  </p>
+                </div>
+                <p class="text-base">
+                  <strong>Na prática:</strong> Configure o índice com
+                  <strong>featureNormType: UNIT_L2_NORM</strong> e
+                  <strong>distanceMeasureType: DOT_PRODUCT_DISTANCE</strong>. Se
+                  seus embeddings já forem normalizados pelo modelo, o Vertex
+                  aplica a normalização de qualquer forma quando o tipo for
+                  UNIT_L2_NORM. Você obtém o mesmo comportamento do cosseno com
+                  melhor desempenho.
+                </p>
+                <h4 class="text-white font-bold mt-6 mb-2">
+                  Normalização em Python
+                </h4>
+                <div
+                  class="bg-slate-900 p-4 rounded font-mono text-sm text-slate-300 overflow-x-auto"
+                >
+                  <pre>
+from numpy.linalg import norm
+import numpy as np
+def normalize_l2(X):
+    norms = norm(X, axis=1, keepdims=True)
+    norms[norms == 0] = 1
+    return X / norms
+# Exemplo: embeddings (n_vectors, dim)
+emb = np.array([[9, 2], [2, 8], [5, 5]])
+emb_norm = normalize_l2(emb)</pre
+                  >
+                </div>
+              </div>
+
+              <div class="mt-8">
+                <button
+                  onclick="
+                    showPanel('lab');
+                    document.getElementById('btn-normalize').click();
+                  "
+                  class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition flex items-center gap-2"
+                >
+                  <span>🚀 Testar o Truque no Laboratório</span>
+                </button>
+              </div>
+            </div>
+            <div
+              class="absolute top-0 right-0 opacity-10 text-[200px] leading-none select-none pointer-events-none"
+            >
+              📐
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <footer
+      class="flex-shrink-0 w-full bg-[var(--nav-bg)] border-t border-white/10 py-6 text-center text-slate-400 text-sm"
+    >
+      <p>© 2026 Vector Search</p>
+    </footer>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+      // --- DATA & STATE ---
+      const state = {
+        vecA: { x: 9, y: 2 }, // Starting "Duro de Matar" approx
+        vecB: { x: 2, y: 8 }, // Starting generic movie
+        normalized: false,
+      };
+
+      // --- DOM ELEMENTS ---
+      const inputs = {
+        ax: document.getElementById("ax"),
+        ay: document.getElementById("ay"),
+        bx: document.getElementById("bx"),
+        by: document.getElementById("by"),
+      };
+
+      const displays = {
+        vecA: document.getElementById("vectorA-display"),
+        vecB: document.getElementById("vectorB-display"),
+        manhattan: document.getElementById("val-manhattan"),
+        euclidean: document.getElementById("val-euclidean"),
+        cosine: document.getElementById("val-cosine"),
+        dot: document.getElementById("val-dot"),
+        match: document.getElementById("match-indicator"),
+      };
+
+      const btnNormalize = document.getElementById("btn-normalize");
+      let chartInstance = null;
+
+      // --- MATH HELPERS ---
+      function getMagnitude(v) {
+        return Math.sqrt(v.x * v.x + v.y * v.y);
+      }
+
+      function normalizeVector(v) {
+        const mag = getMagnitude(v);
+        if (mag === 0) return { x: 0, y: 0 };
+        return { x: v.x / mag, y: v.y / mag };
+      }
+
+      function calculateManhattan(v1, v2) {
+        return Math.abs(v1.x - v2.x) + Math.abs(v1.y - v2.y);
+      }
+
+      function calculateEuclidean(v1, v2) {
+        return Math.sqrt(Math.pow(v1.x - v2.x, 2) + Math.pow(v1.y - v2.y, 2));
+      }
+
+      function calculateDotProduct(v1, v2) {
+        return v1.x * v2.x + v1.y * v2.y;
+      }
+
+      function calculateCosineDistance(v1, v2) {
+        const dot = calculateDotProduct(v1, v2);
+        const magA = getMagnitude(v1);
+        const magB = getMagnitude(v2);
+        if (magA === 0 || magB === 0) return 1; // Undefined angle, treat as max distance
+
+        // Cosine Similarity is dot / (magA * magB)
+        // Cosine Distance is often defined as 1 - Similarity
+        // For the purpose of the UI showing "similarity" implies closeness,
+        // but the text says "Distance". Usually Cosine Distance = 1 - CosineSimilarity.
+        // Let's display Cosine Distance (0 = identical, 2 = opposite).
+        const similarity = dot / (magA * magB);
+        // Clamp for float errors
+        const clampedSim = Math.min(Math.max(similarity, -1), 1);
+        return 1 - clampedSim;
+      }
+
+      // --- UPDATE LOGIC ---
+      function updateState() {
+        // Read raw values
+        let rawA = {
+          x: parseInt(inputs.ax.value),
+          y: parseInt(inputs.ay.value),
+        };
+        let rawB = {
+          x: parseInt(inputs.bx.value),
+          y: parseInt(inputs.by.value),
+        };
+
+        if (state.normalized) {
+          // If normalized mode is ON, we effectively scale the visual vectors to length 5 (for visibility on 0-10 scale)
+          // BUT the math calculation for the "Trick" relies on them being length 1.
+          // To display it well, we update the inputs to reflect the ratio?
+          // No, that's confusing UI.
+          // Instead, we calculate normalized math separately, but visualize unit vectors scaled up.
+
+          const normA = normalizeVector(rawA);
+          const normB = normalizeVector(rawB);
+
+          // For visualization on a 0-10 grid, unit vectors are tiny. Let's scale them to e.g., 8 for the visual
+          // But keep math as length 1 for the Dot Product demo.
+          state.vecA = { x: normA.x, y: normA.y };
+          state.vecB = { x: normB.x, y: normB.y };
+        } else {
+          state.vecA = rawA;
+          state.vecB = rawB;
+        }
+
+        updateMetrics();
+        updateChart();
+        updateUI();
+      }
+
+      function updateMetrics() {
+        const manhattan = calculateManhattan(state.vecA, state.vecB);
+        const euclidean = calculateEuclidean(state.vecA, state.vecB);
+        const cosineDist = calculateCosineDistance(state.vecA, state.vecB); // 0 to 2
+        const dotProd = calculateDotProduct(state.vecA, state.vecB);
+
+        displays.vecA.innerText = `[${state.vecA.x.toFixed(1)}, ${state.vecA.y.toFixed(1)}]`;
+        displays.vecB.innerText = `[${state.vecB.x.toFixed(1)}, ${state.vecB.y.toFixed(1)}]`;
+
+        displays.manhattan.innerText = manhattan.toFixed(2);
+        displays.euclidean.innerText = euclidean.toFixed(2);
+        displays.cosine.innerText = cosineDist.toFixed(4);
+
+        // Highlight the match trick
+        displays.dot.innerText = dotProd.toFixed(4);
+
+        // Similarity check (Cosine Distance is 1 - Cosine Sim).
+        // Dot Product of normalized vectors IS Cosine Similarity.
+        // So if normalized, Dot Product = 1 - Cosine Distance.
+        // Wait, the user wants to know that Dot Product REPLACES Cosine.
+        // If normalized, Dot Product === Cosine Similarity.
+        // Let's show the relationship.
+
+        if (state.normalized) {
+          // When normalized, Dot Product should equal Cosine Similarity
+          // Cosine Distance = 1 - Dot Product
+          // Let's highlight if the numbers relate.
+          // Since the UI shows "Cosine Distance", let's convert Dot to implied distance
+          // Or just show they represent the same ranking power.
+          // Best educational approach: Show that Dot Product is now bounded -1 to 1 and matches the Cosine Similarity component.
+          displays.match.classList.remove("hidden");
+          displays.dot.classList.add("text-green-400");
+        } else {
+          displays.match.classList.add("hidden");
+          displays.dot.classList.remove("text-green-400");
+        }
+      }
+
+      function updateUI() {
+        if (state.normalized) {
+          btnNormalize.innerText = "Restaurar Valores Originais";
+          btnNormalize.classList.add("bg-amber-600", "hover:bg-amber-700");
+          btnNormalize.classList.remove("btn-nav");
+        } else {
+          btnNormalize.innerText = "Aplicar Normalização (Tamanho = 1)";
+          btnNormalize.classList.remove("bg-amber-600", "hover:bg-amber-700");
+          btnNormalize.classList.add("btn-nav");
+        }
+      }
+
+      function toggleNormalization() {
+        state.normalized = !state.normalized;
+        updateState();
+      }
+
+      // --- CHART JS SETUP ---
+      function initChart() {
+        const ctx = document.getElementById("vectorChart").getContext("2d");
+
+        // Custom plugin to draw the "Ghost" paths (Manhattan L-shape, etc)
+        const backgroundPlugin = {
+          id: "customPaths",
+          beforeDatasetsDraw(chart, args, options) {
+            const {
+              ctx,
+              scales: { x, y },
+            } = chart;
+            const va = state.vecA;
+            const vb = state.vecB;
+
+            const xA = x.getPixelForValue(va.x);
+            const yA = y.getPixelForValue(va.y);
+            const xB = x.getPixelForValue(vb.x);
+            const yB = y.getPixelForValue(vb.y);
+            const x0 = x.getPixelForValue(0);
+            const y0 = y.getPixelForValue(0);
+
+            ctx.save();
+
+            // 1. Draw Manhattan Path (L1) - Dotted Gray
+            ctx.beginPath();
+            ctx.moveTo(xA, yA);
+            ctx.lineTo(xB, yA); // Horizontal leg
+            ctx.lineTo(xB, yB); // Vertical leg
+            ctx.strokeStyle = "rgba(0,0,0,0.2)";
+            ctx.setLineDash([5, 5]);
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // 2. Draw Euclidean Path (L2) - Solid Gray Line connecting dots
+            ctx.beginPath();
+            ctx.moveTo(xA, yA);
+            ctx.lineTo(xB, yB);
+            ctx.strokeStyle = "rgba(0,0,0,0.3)";
+            ctx.setLineDash([]); // Solid
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // 3. Draw Vectors from Origin (for Cosine Context)
+            // Vector A
+            ctx.beginPath();
+            ctx.moveTo(x0, y0);
+            ctx.lineTo(xA, yA);
+            ctx.strokeStyle = "#d97706"; // Amber 600
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Vector B
+            ctx.beginPath();
+            ctx.moveTo(x0, y0);
+            ctx.lineTo(xB, yB);
+            ctx.strokeStyle = "#2563eb"; // Blue 600
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // 4. Draw Angle Arc (Cosine)
+            // Calculate angles
+            const angleA = Math.atan2(va.y, va.x);
+            const angleB = Math.atan2(vb.y, vb.x);
+
+            // Draw arc if vectors have length
+            if (getMagnitude(va) > 0 && getMagnitude(vb) > 0) {
+              ctx.beginPath();
+              // Radius for arc - fixed pixels
+              const r = 30;
+              // Chart.js y-axis is inverted (0 at top), atan2 is math standard.
+              // We need to map standard math angles to canvas drawing.
+              // Actually, getPixelForValue handles the flip, but arc angles...
+              // Canvas arc: 0 is right, Math.PI/2 is down.
+              // Math atan2: 0 is right, positive y is up (usually).
+              // Let's rely on visual approximation: calculate angles based on screen coords relative to origin
+              const screenAngleA = Math.atan2(yA - y0, xA - x0);
+              const screenAngleB = Math.atan2(yB - y0, xB - x0);
+
+              ctx.arc(
+                x0,
+                y0,
+                r,
+                screenAngleA,
+                screenAngleB,
+                (screenAngleA > screenAngleB &&
+                  screenAngleA - screenAngleB < Math.PI) ||
+                  screenAngleB - screenAngleA > Math.PI,
+              );
+
+              ctx.strokeStyle = "rgba(255, 0, 0, 0.5)";
+              ctx.lineWidth = 2;
+              ctx.stroke();
+
+              // Label Angle
+              // ctx.fillStyle = 'red';
+              // ctx.fillText("θ", x0 + 10, y0 - 10);
+            }
+
+            ctx.restore();
+          },
+        };
+
+        chartInstance = new Chart(ctx, {
+          type: "scatter",
+          data: {
+            datasets: [
+              {
+                label: "Filme A",
+                data: [{ x: state.vecA.x, y: state.vecA.y }],
+                backgroundColor: "#d97706", // Amber 600
+                pointRadius: 8,
+                pointHoverRadius: 10,
+              },
+              {
+                label: "Filme B",
+                data: [{ x: state.vecB.x, y: state.vecB.y }],
+                backgroundColor: "#2563eb", // Blue 600
+                pointRadius: 8,
+                pointHoverRadius: 10,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                type: "linear",
+                position: "bottom",
+                min: -1,
+                max: 11, // give some padding
+                title: { display: true, text: "Ação (Dimensão X)" },
+              },
+              y: {
+                min: -1,
+                max: 11,
+                title: { display: true, text: "Comédia (Dimensão Y)" },
+              },
+            },
+            plugins: {
+              tooltip: {
+                enabled: true,
+                callbacks: {
+                  label: function (context) {
+                    return `(${context.parsed.x.toFixed(2)}, ${context.parsed.y.toFixed(2)})`;
+                  },
+                },
+              },
+              legend: { display: false }, // Custom legend in UI
+            },
+          },
+          plugins: [backgroundPlugin],
+        });
+      }
+
+      function updateChart() {
+        if (!chartInstance) return;
+
+        // Update axis scaling if normalized to zoom in
+        if (state.normalized) {
+          chartInstance.options.scales.x.min = -0.2;
+          chartInstance.options.scales.x.max = 1.2;
+          chartInstance.options.scales.y.min = -0.2;
+          chartInstance.options.scales.y.max = 1.2;
+        } else {
+          chartInstance.options.scales.x.min = -1;
+          chartInstance.options.scales.x.max = 11;
+          chartInstance.options.scales.y.min = -1;
+          chartInstance.options.scales.y.max = 11;
+        }
+
+        chartInstance.data.datasets[0].data = [
+          { x: state.vecA.x, y: state.vecA.y },
+        ];
+        chartInstance.data.datasets[1].data = [
+          { x: state.vecB.x, y: state.vecB.y },
+        ];
+        chartInstance.update();
+      }
+
+      // --- PANEL NAVIGATION ---
+      function showPanel(sectionId) {
+        document
+          .querySelectorAll(".content-panel")
+          .forEach((el) => el.classList.remove("active"));
+        const panel = document.getElementById("panel-" + sectionId);
+        if (panel) panel.classList.add("active");
+        document.querySelectorAll(".nav-link").forEach((link) => {
+          link.classList.toggle(
+            "active",
+            link.getAttribute("data-section") === sectionId,
+          );
+        });
+      }
+
+      // --- INIT ---
+      window.addEventListener("load", () => {
+        initChart();
+        updateState();
+
+        Object.values(inputs).forEach((input) => {
+          input.addEventListener("input", () => {
+            if (state.normalized) {
+              state.normalized = false;
+              updateUI();
+            }
+            updateState();
+          });
+        });
+
+        btnNormalize.addEventListener("click", toggleNormalization);
+      });
+    </script>
+  </body>
+</html>

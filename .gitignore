@@ -1,0 +1,61 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env.local
+.env.*.local
+
+# Environment (sensitive)
+.env
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Linting / type checking
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Build / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific
+*.log
+nul
+
+
+docs/*.md
+!docs/LAB-GUIADO-01-DETECCAO-RECUSA-LLM.md
+
+
+LAB-DESAFIO.md
+
+docs/*.md
+!lab_rag_chromadb_1h.md
+
+# scripts/*.py desfeito para versionar scripts do projeto
+# !script/
