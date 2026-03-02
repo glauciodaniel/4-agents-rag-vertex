@@ -1,5 +1,6 @@
 """
-Testes para src.rag_ingest: get_env, upload_bytes_to_gcs (mock), ingest_chunks_to_vector_search (mocks).
+Testes para src.rag_ingest: get_env, upload_bytes_to_gcs (mock), ingest_chunks_to_vector_search,
+ingest_pdfs_from_bytes (deduplicação), _file_hash, manifesto (mocks).
 """
 import pytest
 
@@ -58,8 +59,69 @@ class TestIngestChunksToVectorSearch:
         monkeypatch.setattr("src.embedding_gemini.embed_texts", fake_embed)
         monkeypatch.setattr("src.chunk_store.save_chunks", fake_save)
         from src.rag_ingest import ingest_chunks_to_vector_search
-        n = ingest_chunks_to_vector_search([("id1", "t1"), ("id2", "t2")])
+        chunks = [
+            ("id1", {"text": "t1", "metadata": {}}),
+            ("id2", {"text": "t2", "metadata": {}}),
+        ]
+        n = ingest_chunks_to_vector_search(chunks)
         assert n == 2
         assert len(upsert_calls) >= 1
         assert len(save_calls) == 1
-        assert save_calls[0][0] == {"id1": "t1", "id2": "t2"}
+        saved = save_calls[0][0]
+        assert saved["id1"]["text"] == "t1"
+        assert saved["id2"]["text"] == "t2"
+
+
+class TestFileHash:
+    """Testes para _file_hash."""
+
+    def test_returns_sha256_hex(self):
+        from src.rag_ingest import _file_hash
+        h = _file_hash(b"hello")
+        assert len(h) == 64
+        assert all(c in "0123456789abcdef" for c in h)
+
+    def test_same_content_same_hash(self):
+        from src.rag_ingest import _file_hash
+        assert _file_hash(b"x") == _file_hash(b"x")
+        assert _file_hash(b"x") != _file_hash(b"y")
+
+
+class TestIngestPdfsFromBytesDeduplication:
+    """Testes para ingest_pdfs_from_bytes com deduplicação e force."""
+
+    def test_returns_tuple_count_and_skipped(self, monkeypatch):
+        manifest = {}
+        def load_manifest(bucket, project=None):
+            return manifest
+        def save_manifest(m, bucket, project=None):
+            pass  # caller already updated manifest (same dict)
+        monkeypatch.setattr("src.rag_ingest.get_env", lambda: ("proj", "loc", "bucket", "projects/p/loc/indexes/i", "ep", "/repo"))
+        monkeypatch.setattr("src.rag_ingest._load_manifest", load_manifest)
+        monkeypatch.setattr("src.rag_ingest._save_manifest", save_manifest)
+        monkeypatch.setattr("src.rag_ingest._chunk_pdf_files", lambda f: [("doc_0_abc123def456", {"text": "t", "metadata": {}})])
+        import google.cloud.aiplatform as ap
+        mock_index = type("Index", (), {})()
+        mock_index.upsert_datapoints = lambda datapoints: None
+        monkeypatch.setattr(ap, "init", lambda **kw: None)
+        monkeypatch.setattr(ap, "MatchingEngineIndex", lambda index_name: mock_index)
+        monkeypatch.setattr("src.embedding_gemini.embed_texts", lambda texts, dimension=768: [[0.1] * 768 for _ in texts])
+        monkeypatch.setattr("src.chunk_store.save_chunks", lambda mapping, merge=True: None)
+        from src.rag_ingest import ingest_pdfs_from_bytes
+        count, skipped = ingest_pdfs_from_bytes([("a.pdf", b"pdf content")], force=False)
+        assert count == 1
+        assert skipped == []
+        assert "a.pdf" in manifest
+        assert manifest["a.pdf"]["sha256"] == __import__("hashlib").sha256(b"pdf content").hexdigest()
+
+    def test_skips_when_same_hash_and_not_force(self, monkeypatch):
+        h = __import__("hashlib").sha256(b"same").hexdigest()
+        manifest = {"doc.pdf": {"sha256": h, "ingested_at": "2026-01-01T00:00:00Z", "chunk_count": 1, "chunk_ids": ["x"]}}
+        def load_manifest(bucket, project=None):
+            return manifest
+        monkeypatch.setattr("src.rag_ingest.get_env", lambda: ("proj", "loc", "bucket", "idx", "ep", "/repo"))
+        monkeypatch.setattr("src.rag_ingest._load_manifest", load_manifest)
+        from src.rag_ingest import ingest_pdfs_from_bytes
+        count, skipped = ingest_pdfs_from_bytes([("doc.pdf", b"same")], force=False)
+        assert count == 0
+        assert "doc.pdf" in skipped

@@ -89,17 +89,23 @@ class TestChunkPdfBytes:
     """Testes para chunk_pdf_bytes."""
 
     def test_chunk_pdf_bytes_mocked_extract(self, monkeypatch):
-        """Com texto extraído mockado, verifica IDs e quantidade de chunks."""
-        fake_text = "Primeiro paragrafo.\n\n" + "Segundo paragrafo com mais texto. " * 20
+        """Com texto extraído mockado, verifica IDs e estrutura com text e metadata."""
+        fake_pages = [(0, "Primeiro paragrafo."), (1, "Segundo paragrafo com mais texto. " * 20)]
 
-        def fake_extract(data):
-            return fake_text
+        def fake_extract_by_page(data):
+            return fake_pages
 
-        monkeypatch.setattr("src.chunking.extract_text_from_pdf_bytes", fake_extract)
-        chunks = chunk_pdf_bytes(b"fake-pdf-bytes", source_id="test_doc")
+        monkeypatch.setattr("src.chunking.extract_text_by_page_bytes", fake_extract_by_page)
+        chunks = chunk_pdf_bytes(b"fake-pdf-bytes", source_id="test_doc", source_filename="test.pdf")
         assert len(chunks) >= 1
-        for chunk_id, text in chunks:
+        for chunk_id, chunk_dict in chunks:
             assert chunk_id.startswith("test_doc_")
             assert "_" in chunk_id
-            assert len(text) > 0
-            assert isinstance(chunk_id, str) and isinstance(text, str)
+            assert isinstance(chunk_dict, dict)
+            assert "text" in chunk_dict and "metadata" in chunk_dict
+            assert len(chunk_dict["text"]) > 0
+            meta = chunk_dict["metadata"]
+            assert meta.get("source_filename") == "test.pdf"
+            assert "page_numbers" in meta
+            assert "chunk_index" in meta
+            assert "total_chunks" in meta

@@ -41,6 +41,8 @@ uploaded = st.file_uploader(
 if uploaded:
     st.info(f"{len(uploaded)} arquivo(s) selecionado(s). Clique em **Processar documentos** para indexar no Vector Search.")
 
+force_reingest = st.checkbox("Re-ingerir mesmo que o arquivo já exista (ignorar deduplicação)", value=False)
+
 if st.button("Processar documentos", type="primary", disabled=not uploaded):
     if not uploaded:
         st.warning("Selecione pelo menos um PDF.")
@@ -48,7 +50,9 @@ if st.button("Processar documentos", type="primary", disabled=not uploaded):
         with st.spinner("Processando PDFs (chunking, embedding, upsert no Vector Search)…"):
             try:
                 files = [(f.name, f.read()) for f in uploaded]
-                count = ingest_pdfs_from_bytes(files)
+                count, skipped = ingest_pdfs_from_bytes(files, force=force_reingest)
                 st.success(f"Concluído. Chunks indexados: {count}.")
+                if skipped:
+                    st.info(f"Arquivos já ingeridos (pulados): {', '.join(skipped)}")
             except Exception as e:
                 st.exception(e)

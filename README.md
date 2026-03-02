@@ -6,9 +6,9 @@ Projeto de ensino: agente que ensina como utilizar RAG na Vertex AI, com melhore
 
 - **Vertex AI Vector Search**: índice vetorial com **768 dimensões**, criado via script (`create_vector_search_index.py`). Atualização via `upsert_datapoints` (stream).
 - **Embedding**: modelo **text-embedding-004** (Google AI API / Gemini), chave API em `GEMINI_API_KEY`, dimensão 768 para compatibilidade com o índice.
-- **Chunk store**: mapeamento id → texto dos chunks em GCS (`gs://bucket/vector-search-index/chunks.json`).
-- **Google ADK**: agente com tool de retrieval (Vector Search + Gemini + chunk store).
-- **LangGraph**: orquestrador com a mesma tool de RAG.
+- **Chunk store**: chunks em GCS com sharding por documento (`vector-search-index/chunks/{source_id}.json`) e índice leve; metadados (fonte, página, data de ingestão) por chunk.
+- **Google ADK**: agente com foco em respostas diretas e concisas; tools de retrieval e de resumo do contexto.
+- **LangGraph**: orquestrador com foco em análise aprofundada e multi-hop; tools de retrieval e de comparação de fontes.
 
 ## Pré-requisitos
 
@@ -49,11 +49,21 @@ cp .env.example .env
    - `python -m src.run_adk_agent` — CLI para perguntas ao agente RAG.
 
 5. **LangGraph**  
-   - `python -m src.run_langgraph_agent` — orquestrador com tool de RAG.
+   - `python -m src.run_langgraph_agent` — orquestrador com análise multi-hop e comparação de fontes.
+
+## Quando usar cada agente
+
+| Agente    | Melhor para                                           | Características                                                                 |
+|-----------|--------------------------------------------------------|----------------------------------------------------------------------------------|
+| **ADK**   | Perguntas objetivas, respostas rápidas, ensino de conceitos | Respostas curtas; tool de resumo do contexto; menos chamadas ao corpus.         |
+| **LangGraph** | Análise aprofundada, múltiplas fontes, verificação de consistência | Temperature maior; raciocínio em etapas; tool que compara duas buscas (conceito vs detalhes). |
+
+Use o **ADK** quando quiser uma resposta direta (ex.: “O que é chunking?”). Use o **LangGraph** quando quiser uma análise mais completa ou comparar informações de vários trechos (ex.: “Compare as recomendações de RAG da documentação X e Y”).
 
 ## Variáveis de ambiente
 
-- **Obrigatórias**: `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `GOOGLE_CLOUD_STORAGE_BUCKET`, `VECTOR_SEARCH_INDEX_NAME`, `VECTOR_SEARCH_INDEX_ENDPOINT_NAME`, `GEMINI_API_KEY`
+- **Obrigatórias**: `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `GOOGLE_CLOUD_STORAGE_BUCKET`, `VECTOR_SEARCH_INDEX_NAME`, `VECTOR_SEARCH_INDEX_ENDPOINT_NAME`
+- **Embedding**: use **Vertex (ADC)** definindo `GOOGLE_GENAI_USE_VERTEXAI=1` (e `gcloud auth application-default login`); ou use **Google AI API** definindo `GEMINI_API_KEY` (uma das duas é obrigatória).
 - **Opcional**: `VECTOR_SEARCH_DEPLOYED_INDEX_ID` (default: `rag_pdf_deployed`), `PDF_SOURCE_DIR` (default: `data/pdfs`)
 
 ## Estrutura

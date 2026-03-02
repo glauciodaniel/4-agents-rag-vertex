@@ -1,5 +1,6 @@
 """
 Agente Google ADK com retrieval via Vector Search + Gemini embedding (sem RAG Engine Corpus).
+Foco em respostas diretas e concisas. Inclui tool de resumo do contexto recuperado.
 Requer GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION, VECTOR_SEARCH_INDEX_ENDPOINT_NAME, GEMINI_API_KEY no .env.
 """
 import os
@@ -27,14 +28,31 @@ def retrieve_rag_documentation(query: str) -> str:
     return vertex_rag_retrieval(query, top_k=10, vector_distance_threshold=0.6)
 
 
+def summarize_context(context: str) -> str:
+    """Resume em 2-4 frases o texto recuperado, mantendo apenas o essencial para responder à pergunta do usuário. Use após recuperar documentação longa."""
+    if not context or len(context.strip()) < 100:
+        return context or "(Nenhum contexto para resumir.)"
+    try:
+        from vertexai.generative_models import GenerativeModel
+        model = GenerativeModel("gemini-2.0-flash-001")
+        response = model.generate_content(
+            f"Resuma em 2 a 4 frases, de forma objetiva, o seguinte texto. Mantenha apenas informações relevantes:\n\n{context[:12000]}"
+        )
+        if response and response.text:
+            return response.text.strip()
+    except Exception as e:
+        return f"(Erro ao resumir: {e}. Use o contexto completo.)\n\n{context[:2000]}"
+    return context[:1500]
+
+
 INSTRUCTION = """Você é um instrutor especializado em RAG (Retrieval-Augmented Generation) na Vertex AI.
-Sua função é ensinar melhores práticas e conceitos com base nos documentos indexados (Responsible AI, AWS, Microsoft, etc.).
-Sempre que responder, use a ferramenta de recuperação para buscar trechos relevantes e cite as fontes quando possível.
-Explique: chunking, embeddings, Vector Search e uso do Vertex AI de forma clara e profissional."""
+Dê respostas diretas e concisas. Use a ferramenta de recuperação para buscar trechos relevantes nos documentos indexados.
+Quando o contexto recuperado for longo, use summarize_context para obter um resumo antes de formular sua resposta.
+Cite as fontes (nome do documento e página quando disponível). Evite rodeios; vá ao ponto."""
 
 root_agent = Agent(
     model="gemini-2.0-flash-001",
     name="ask_rag_agent",
     instruction=INSTRUCTION,
-    tools=[retrieve_rag_documentation],
+    tools=[retrieve_rag_documentation, summarize_context],
 )

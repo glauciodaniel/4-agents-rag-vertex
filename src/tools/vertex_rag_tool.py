@@ -37,7 +37,7 @@ def vertex_rag_retrieval(
 
     from google.cloud import aiplatform
     from src.embedding_gemini import embed_texts
-    from src.chunk_store import load_chunks
+    from src.chunk_store import load_chunks_by_ids
 
     query_vectors = embed_texts([query], dimension=768, task_type="retrieval_query")
     if not query_vectors:
@@ -52,14 +52,30 @@ def vertex_rag_retrieval(
         num_neighbors=top_k,
     )
 
-    chunk_map = load_chunks()
+    neighbor_ids = []
+    for neighbor_list in response or []:
+        for neighbor in neighbor_list or []:
+            datapoint_id = getattr(neighbor, "id", None)
+            if datapoint_id:
+                neighbor_ids.append(datapoint_id)
+    chunk_map = load_chunks_by_ids(neighbor_ids)
     parts = []
     for neighbor_list in response or []:
         for neighbor in neighbor_list or []:
             datapoint_id = getattr(neighbor, "id", None)
             if not datapoint_id:
                 continue
-            text = chunk_map.get(datapoint_id, "")
+            val = chunk_map.get(datapoint_id)
+            if isinstance(val, dict):
+                text = val.get("text", "")
+                meta = val.get("metadata") or {}
+                source = meta.get("source_filename", "")
+                pages = meta.get("page_numbers", [])
+                page_str = f", p.{'-'.join(map(str, pages))}" if pages else ""
+                header = f"[Fonte: {source}{page_str}]" if source else f"[{datapoint_id}]"
+            else:
+                text = val if isinstance(val, str) else ""
+                header = f"[{datapoint_id}]"
             if text:
-                parts.append(f"[{datapoint_id}]\n{text}")
+                parts.append(f"{header}\n{text}")
     return "\n\n---\n\n".join(parts) if parts else "Nenhum contexto encontrado para a consulta."

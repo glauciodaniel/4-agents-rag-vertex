@@ -1,7 +1,8 @@
 """
-Embedding com Gemini (Google AI API). Usa GEMINI_API_KEY.
-Modelo: gemini-embedding-001 com output_dimensionality=768 para compatibilidade com o índice Vector Search.
-SDK: google.genai (não o deprecated google.generativeai).
+Embedding com Gemini. Suporta autenticação via Vertex AI (ADC) ou Google AI API (GEMINI_API_KEY).
+Prioridade: GOOGLE_GENAI_USE_VERTEXAI=1 com GOOGLE_CLOUD_PROJECT → Vertex; senão GEMINI_API_KEY.
+Modelo: gemini-embedding-001, output_dimensionality=768 para compatibilidade com o índice Vector Search.
+SDK: google.genai.
 """
 import os
 import time
@@ -22,12 +23,19 @@ MAX_RETRIES = 3
 
 def _get_client():
     from google import genai
+    use_vertex = (os.getenv("GOOGLE_GENAI_USE_VERTEXAI") or "").strip()
+    project = (os.getenv("GOOGLE_CLOUD_PROJECT") or "").strip()
+    location = (os.getenv("GOOGLE_CLOUD_LOCATION") or "us-east1").strip()
     api_key = (os.getenv("GEMINI_API_KEY") or "").strip()
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY não configurado no .env.")
-    # vertexai=False força uso da API Google AI (generativelanguage), que aceita API key.
-    # Com GOOGLE_GENAI_USE_VERTEXAI=1 no .env, o SDK usaria Vertex (OAuth), que não aceita key.
-    return genai.Client(api_key=api_key, vertexai=False)
+
+    if use_vertex == "1" and project:
+        return genai.Client(vertexai=True, project=project, location=location)
+    if api_key:
+        return genai.Client(api_key=api_key, vertexai=False)
+    raise ValueError(
+        "Configure GOOGLE_GENAI_USE_VERTEXAI=1 com GOOGLE_CLOUD_PROJECT (e GOOGLE_CLOUD_LOCATION), "
+        "ou defina GEMINI_API_KEY no .env."
+    )
 
 
 def embed_texts(

@@ -1,0 +1,1785 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vertex AI — RAG Engine, Vector Search e Índice</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap");
+      :root {
+        --nav-bg: #0c1929;
+        --nav-hover: #1a365d;
+        --nav-active: #2c5282;
+        --page-bg: #0f172a;
+        --card-bg: #ffffff;
+        --card-border: #e2e8f0;
+        --text-primary: #1e293b;
+        --text-muted: #64748b;
+        --accent: #3b82f6;
+        --accent-light: #93c5fd;
+      }
+      html, body { height: 100%; margin: 0; }
+      body {
+        font-family: "Inter", sans-serif;
+        background: var(--page-bg);
+        color: #e2e8f0;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        overflow: hidden;
+      }
+      .app-layout { display: flex; flex: 1; width: 100%; min-height: 0; }
+      .sidebar {
+        width: 260px; min-width: 260px;
+        background: var(--nav-bg);
+        border-right: 1px solid rgba(255,255,255,0.08);
+        padding: 1.5rem 0;
+        display: flex; flex-direction: column;
+        overflow-y: auto;
+      }
+      .sidebar-title {
+        padding: 0 1.25rem 1rem;
+        font-size: 1rem; font-weight: 700; color: #fff;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        margin-bottom: 0.75rem;
+      }
+      .sidebar-sub {
+        font-size: 0.7rem; font-weight: 600;
+        color: rgba(255,255,255,0.5);
+        text-transform: uppercase; letter-spacing: 0.05em;
+        padding: 0 1.25rem; margin-bottom: 0.5rem;
+      }
+      .nav-link {
+        display: block; padding: 0.6rem 1.25rem;
+        color: rgba(255,255,255,0.8); text-decoration: none;
+        font-size: 0.9rem;
+        transition: background 0.15s, color 0.15s;
+      }
+      .nav-link:hover { background: var(--nav-hover); color: #fff; }
+      .nav-link.active {
+        background: var(--nav-active); color: var(--accent-light);
+        border-left: 3px solid var(--accent);
+        padding-left: calc(1.25rem - 3px);
+      }
+      .content-area {
+        flex: 1; overflow: auto;
+        background: var(--page-bg);
+        padding: 1.5rem 2rem;
+      }
+      .content-panel { display: none; max-width: 960px; margin: 0 auto; }
+      .content-panel.active { display: block; }
+      .content-panel .panel-card {
+        background: var(--card-bg); color: var(--text-primary);
+        border-radius: 12px; border: 1px solid var(--card-border);
+        padding: 1.5rem; margin-bottom: 1rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      }
+      .code-block {
+        font-family: ui-monospace, monospace; font-size: 0.8rem;
+        background: #1e293b; color: #e2e8f0;
+        padding: 1rem; border-radius: 8px; overflow-x: auto;
+        margin-bottom: 1rem;
+      }
+      .code-block pre { margin: 0; white-space: pre-wrap; }
+      .ref-link { font-size: 0.75rem; color: var(--accent); }
+      .badge {
+        display: inline-block; font-size: 0.7rem; font-weight: 600;
+        padding: 0.15rem 0.5rem; border-radius: 4px;
+      }
+      .badge-blue { background: #dbeafe; color: #1d4ed8; }
+      .badge-green { background: #dcfce7; color: #15803d; }
+      .badge-amber { background: #fef3c7; color: #b45309; }
+      .badge-slate { background: #f1f5f9; color: #475569; }
+      .badge-red { background: #fee2e2; color: #b91c1c; }
+      .field-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 1rem; }
+      .field-table th {
+        background: #f1f5f9; text-align: left;
+        padding: 0.5rem 0.75rem; border: 1px solid #e2e8f0;
+        font-weight: 600; color: #334155;
+      }
+      .field-table td {
+        padding: 0.5rem 0.75rem; border: 1px solid #e2e8f0;
+        vertical-align: top; color: #334155;
+      }
+      .field-table tr:nth-child(even) td { background: #f8fafc; }
+      .field-table code { background: #e2e8f0; padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.8rem; }
+      .tip-box {
+        border-left: 4px solid var(--accent);
+        background: #eff6ff; padding: 0.75rem 1rem;
+        border-radius: 0 8px 8px 0; margin-bottom: 1rem;
+        font-size: 0.875rem; color: #1e40af;
+      }
+      .warn-box {
+        border-left: 4px solid #f59e0b;
+        background: #fffbeb; padding: 0.75rem 1rem;
+        border-radius: 0 8px 8px 0; margin-bottom: 1rem;
+        font-size: 0.875rem; color: #92400e;
+      }
+      .section-title {
+        font-size: 1.25rem; font-weight: 700;
+        color: #1e293b; margin-bottom: 0.5rem; margin-top: 1.5rem;
+      }
+      .section-title:first-child { margin-top: 0; }
+    </style>
+  </head>
+  <body>
+    <div class="app-layout">
+      <aside class="sidebar" aria-label="Menu">
+        <div class="sidebar-title">Vertex AI</div>
+        <div class="sidebar-sub">Conteúdo</div>
+        <a href="#" class="nav-link active" data-section="intro"
+           onclick="showPanel('intro'); return false;">Introdução</a>
+        <a href="#" class="nav-link" data-section="rag-engine"
+           onclick="showPanel('rag-engine'); return false;">RAG Engine</a>
+        <a href="#" class="nav-link" data-section="vector-search"
+           onclick="showPanel('vector-search'); return false;">Vector Search</a>
+        <a href="#" class="nav-link" data-section="indice"
+           onclick="showPanel('indice'); return false;">Índice</a>
+        <a href="#" class="nav-link" data-section="vector-index"
+           onclick="showPanel('vector-index'); return false;">Vector Index</a>
+        <a href="#" class="nav-link" data-section="endpoint-criar"
+           onclick="showPanel('endpoint-criar'); return false;">Endpoint de Índice</a>
+        <a href="#" class="nav-link" data-section="endpoint"
+           onclick="showPanel('endpoint'); return false;">Endpoint do índice</a>
+        <a href="#" class="nav-link" data-section="bucket"
+           onclick="showPanel('bucket'); return false;">Criar bucket (GCS)</a>
+        <a href="#" class="nav-link" data-section="custos"
+           onclick="showPanel('custos'); return false;">💰 Calculadora de Custos</a>
+      </aside>
+
+      <main class="content-area">
+
+        <!-- ============================================================ -->
+        <!-- PAINEL: INTRODUÇÃO -->
+        <!-- ============================================================ -->
+        <div id="panel-intro" class="content-panel active">
+          <div class="panel-card">
+            <h2 class="text-2xl font-bold text-slate-800 mb-3">Vertex AI — Busca Vetorial e RAG</h2>
+            <p class="text-slate-600 leading-relaxed mb-4">
+              Esta página é um <strong>documento de referência</strong> sobre os quatro recursos centrais do
+              <strong>Vertex AI</strong> (Google Cloud) para construir aplicações de busca semântica e
+              <strong>RAG</strong> (Retrieval-Augmented Generation). Cada seção explica os campos, valores
+              aceitos, boas práticas e exemplos de código extraídos da documentação oficial.
+            </p>
+            <div class="grid md:grid-cols-2 gap-4 mb-4">
+              <div class="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                <div class="font-bold text-blue-800 mb-1">📚 RAG Engine</div>
+                <p class="text-sm text-blue-700">Serviço gerenciado que combina retrieval vetorial com um LLM para responder perguntas sobre seus dados. Gerencia corpus, chunking, embedding e geração.</p>
+              </div>
+              <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                <div class="font-bold text-slate-800 mb-1">🔍 Vector Search</div>
+                <p class="text-sm text-slate-600">Motor de busca por similaridade (k-NN aproximado) que consulta um índice vetorial e retorna os vizinhos mais próximos de um vetor de query.</p>
+              </div>
+              <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                <div class="font-bold text-slate-800 mb-1">📇 Vector Index</div>
+                <p class="text-sm text-slate-600">Estrutura que armazena embeddings (vetores) dos seus dados. Configurado com dimensões, algoritmo (Tree-AH ou Brute Force), métrica de distância e tamanho de shard.</p>
+              </div>
+              <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                <div class="font-bold text-slate-800 mb-1">🔗 Endpoint do índice</div>
+                <p class="text-sm text-slate-600">Recurso implantado que expõe um ou mais índices para consultas. Pode ser público (HTTPS) ou privado (VPC Peering). Gerencia escala e disponibilidade.</p>
+              </div>
+            </div>
+            <div class="tip-box">
+              <strong>Fluxo completo:</strong> Dados → Embeddings → Vector Index → Deploy no Endpoint → Consulta via Vector Search → RAG Engine usa o resultado como contexto para o LLM.
+            </div>
+            <p class="text-xs text-slate-500">
+              Documentação oficial:
+              <a href="https://cloud.google.com/vertex-ai/docs/vector-search/overview" target="_blank" class="ref-link">Vector Search Overview</a> ·
+              <a href="https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/rag-api" target="_blank" class="ref-link">RAG API</a>
+            </p>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- PAINEL: RAG ENGINE -->
+        <!-- ============================================================ -->
+        <div id="panel-rag-engine" class="content-panel">
+          <div class="panel-card">
+            <h2 class="text-2xl font-bold text-slate-800 mb-3">RAG Engine</h2>
+            <p class="text-slate-600 mb-4">
+              O <strong>RAG Engine</strong> do Vertex AI é um serviço gerenciado de ponta a ponta para
+              <strong>Retrieval-Augmented Generation</strong>. Ele abstrai toda a pipeline: ingestão de documentos,
+              chunking, geração de embeddings, indexação vetorial, retrieval e geração de resposta com LLM.
+              Você não precisa gerenciar o Vector Index diretamente — o RAG Engine faz isso por você.
+            </p>
+
+            <h3 class="section-title">Conceitos fundamentais</h3>
+            <table class="field-table">
+              <thead><tr><th>Conceito</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr><td><code>RagCorpus</code></td><td>Coleção de documentos indexados. Equivale a uma "base de conhecimento". Cada corpus tem seu próprio índice vetorial interno.</td></tr>
+                <tr><td><code>RagFile</code></td><td>Documento individual dentro de um corpus. Pode ser texto, PDF, HTML, etc. O RAG Engine faz o chunking automaticamente.</td></tr>
+                <tr><td><code>RagResource</code></td><td>Referência a um corpus usado em uma query de retrieval ou geração.</td></tr>
+                <tr><td><code>RetrievalConfig</code></td><td>Configuração de como o retrieval é feito: quantos chunks retornar, threshold de similaridade, etc.</td></tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">Fluxo de uso</h3>
+            <div class="bg-slate-100 p-4 rounded-lg font-mono text-sm text-slate-800 mb-4">
+              1. Criar RagCorpus<br>
+              2. Importar documentos (RagFiles) — GCS, Drive, inline<br>
+              3. RAG Engine faz chunking + embedding automaticamente<br>
+              4. Chamar retrieveContexts() com a query do usuário<br>
+              5. Usar os contextos retornados para chamar generateContent() com o LLM<br>
+              — OU —<br>
+              4+5. Chamar diretamente generateContent() com RAG tool configurada
+            </div>
+
+            <h3 class="section-title">Criar um RagCorpus</h3>
+            <div class="code-block">
+              <pre>from vertexai.preview import rag
+import vertexai
+
+vertexai.init(project="SEU_PROJETO", location="us-central1")
+
+# Criar corpus com embedding model padrão
+corpus = rag.create_corpus(
+    display_name="meu-corpus",
+    description="Base de conhecimento de documentos internos",
+    # Opcional: especificar modelo de embedding
+    embedding_model_config=rag.EmbeddingModelConfig(
+        publisher_model="publishers/google/models/text-embedding-004"
+    ),
+)
+print(corpus.name)  # projects/.../ragCorpora/...</pre>
+            </div>
+
+            <h3 class="section-title">Importar documentos</h3>
+            <div class="code-block">
+              <pre># Importar de Cloud Storage
+rag.import_files(
+    corpus_name=corpus.name,
+    paths=["gs://meu-bucket/documentos/"],
+    # Configuração de chunking
+    chunk_size=512,        # tokens por chunk (padrão: 1024)
+    chunk_overlap=100,     # sobreposição entre chunks (padrão: 200)
+)
+
+# Importar de Google Drive
+rag.import_files(
+    corpus_name=corpus.name,
+    paths=["https://drive.google.com/drive/folders/FOLDER_ID"],
+    chunk_size=512,
+    chunk_overlap=100,
+)</pre>
+            </div>
+
+            <h3 class="section-title">Parâmetros de chunking</h3>
+            <table class="field-table">
+              <thead><tr><th>Parâmetro</th><th>Tipo</th><th>Padrão</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr><td><code>chunk_size</code></td><td>int</td><td>1024</td><td>Número de tokens por chunk. Chunks menores = mais precisão; maiores = mais contexto por resultado.</td></tr>
+                <tr><td><code>chunk_overlap</code></td><td>int</td><td>200</td><td>Tokens de sobreposição entre chunks consecutivos. Evita perda de contexto nas bordas.</td></tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">Retrieval de contextos</h3>
+            <div class="code-block">
+              <pre>response = rag.retrieval_query(
+    rag_resources=[
+        rag.RagResource(rag_corpus=corpus.name)
+    ],
+    text="Qual é a política de reembolso?",
+    similarity_top_k=5,           # número de chunks a retornar
+    vector_distance_threshold=0.5, # threshold de distância (0=idêntico, 1=diferente)
+)
+for context in response.contexts.contexts:
+    print(context.text)
+    print(context.score)</pre>
+            </div>
+
+            <h3 class="section-title">Parâmetros de retrieval</h3>
+            <table class="field-table">
+              <thead><tr><th>Parâmetro</th><th>Tipo</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr><td><code>similarity_top_k</code></td><td>int</td><td>Número máximo de chunks retornados. Padrão: 10. Valores maiores aumentam recall mas podem aumentar ruído.</td></tr>
+                <tr><td><code>vector_distance_threshold</code></td><td>float (0–1)</td><td>Threshold de distância vetorial. Chunks com distância acima desse valor são descartados. Padrão: 0.5 para DOT_PRODUCT.</td></tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">Geração com RAG (generateContent)</h3>
+            <div class="code-block">
+              <pre>import vertexai
+from vertexai.generative_models import GenerativeModel, Tool
+from vertexai.preview.generative_models import grounding
+
+vertexai.init(project="SEU_PROJETO", location="us-central1")
+
+rag_retrieval_tool = Tool.from_retrieval(
+    retrieval=grounding.Retrieval(
+        source=grounding.VertexRagStore(
+            rag_resources=[
+                grounding.RagResource(rag_corpus=corpus.name)
+            ],
+            similarity_top_k=5,
+            vector_distance_threshold=0.5,
+        )
+    )
+)
+
+model = GenerativeModel("gemini-2.0-flash-001", tools=[rag_retrieval_tool])
+response = model.generate_content("Qual é a política de reembolso?")
+print(response.text)</pre>
+            </div>
+
+            <h3 class="section-title">Modelos de embedding suportados</h3>
+            <table class="field-table">
+              <thead><tr><th>Modelo</th><th>Dimensões</th><th>Uso recomendado</th></tr></thead>
+              <tbody>
+                <tr><td><code>text-embedding-004</code></td><td>768</td><td>Textos em inglês e multilíngue. Boa relação custo/qualidade.</td></tr>
+                <tr><td><code>text-multilingual-embedding-002</code></td><td>768</td><td>Textos em múltiplos idiomas incluindo português.</td></tr>
+                <tr><td><code>textembedding-gecko@003</code></td><td>768</td><td>Versão anterior, ainda suportada.</td></tr>
+              </tbody>
+            </table>
+
+            <div class="warn-box">
+              <strong>Atenção:</strong> O modelo de embedding definido na criação do corpus não pode ser alterado depois. Todos os documentos importados usarão esse modelo. Se precisar mudar, crie um novo corpus.
+            </div>
+
+            <h3 class="section-title">Corpus: fontes de dados e gestão</h3>
+            <p class="text-slate-600 mb-3">
+              O RAG Engine suporta várias fontes para importar documentos no corpus:
+            </p>
+            <table class="field-table">
+              <thead><tr><th>Fonte</th><th>Uso</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Cloud Storage (GCS)</strong></td><td><code>paths=["gs://bucket/pasta/"]</code>. PDFs, TXT, HTML. Formato mais comum para pipelines automatizados.</td></tr>
+                <tr><td><strong>Google Drive</strong></td><td><code>paths=["https://drive.google.com/drive/folders/ID"]</code>. Acesso via OAuth ao Drive do usuário ou conta de serviço.</td></tr>
+                <tr><td><strong>Conteúdo inline</strong></td><td>Envio de texto ou metadados diretamente na API para indexação sob demanda.</td></tr>
+              </tbody>
+            </table>
+            <p class="text-slate-600 mb-2">Após a importação, o corpus mantém um índice vetorial interno. Você pode reimportar para adicionar ou atualizar documentos; a gestão do ciclo de vida (ex.: exclusão de arquivos obsoletos) é feita via API ou Console.</p>
+
+            <h3 class="section-title">Retrieval configs e reranking</h3>
+            <p class="text-slate-600 mb-3">
+              <code>RetrievalConfig</code> controla quantos chunks retornar (<code>similarity_top_k</code>), o threshold de distância (<code>vector_distance_threshold</code>) e, quando disponível, opções de reranking para melhorar a relevância dos resultados antes de enviar ao LLM. Consulte a documentação da sua região para parâmetros de reranking disponíveis.
+            </p>
+
+            <h3 class="section-title">Grounding com Gemini</h3>
+            <p class="text-slate-600 mb-3">
+              <strong>Grounding</strong> é a integração do retrieval com o modelo de linguagem: o Gemini recebe automaticamente os trechos recuperados do corpus como contexto e pode citar as fontes na resposta. Use <code>Tool.from_retrieval()</code> com <code>grounding.Retrieval</code> e <code>VertexRagStore</code> ao chamar <code>generateContent()</code>; o modelo usa o RAG Engine como ferramenta e devolve a resposta já fundamentada nos documentos.
+            </p>
+
+            <p class="text-xs text-slate-500 mt-4">
+              Documentação:
+              <a href="https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/rag-api" target="_blank" class="ref-link">RAG API Reference</a> ·
+              <a href="https://cloud.google.com/vertex-ai/generative-ai/docs/rag/use-rag-engine" target="_blank" class="ref-link">Use RAG Engine</a> ·
+              <a href="https://cloud.google.com/vertex-ai/generative-ai/docs/rag/rag-engine-overview" target="_blank" class="ref-link">RAG Engine Overview</a>
+            </p>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- PAINEL: VECTOR SEARCH -->
+        <!-- ============================================================ -->
+        <div id="panel-vector-search" class="content-panel">
+          <div class="panel-card">
+            <h2 class="text-2xl font-bold text-slate-800 mb-3">Vector Search</h2>
+            <p class="text-slate-600 mb-4">
+              O <strong>Vertex AI Vector Search</strong> (anteriormente Matching Engine) é o serviço de
+              busca por similaridade vetorial do Google Cloud. Dado um vetor de consulta, retorna os
+              <em>k</em> vizinhos mais próximos de um índice vetorial usando o algoritmo
+              <strong>ScaNN</strong> (Scalable Nearest Neighbors). Suporta bilhões de vetores com latência
+              de milissegundos.
+            </p>
+
+            <h3 class="section-title">Métricas de distância (<code>distanceMeasureType</code>)</h3>
+            <p class="text-slate-600 mb-3">Definida na criação do índice. Não pode ser alterada depois.</p>
+            <table class="field-table">
+              <thead><tr><th>Valor</th><th>Nome</th><th>Quando usar</th><th>Obs.</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code>DOT_PRODUCT_DISTANCE</code></td>
+                  <td>Produto Escalar</td>
+                  <td><strong>Padrão e recomendado</strong> para embeddings de texto normalizados. Equivale ao cosseno quando vetores têm norma L2 = 1.</td>
+                  <td>Definido internamente como negativo do produto escalar (menor = mais similar).</td>
+                </tr>
+                <tr>
+                  <td><code>COSINE_DISTANCE</code></td>
+                  <td>Distância do Cosseno</td>
+                  <td>Quando os vetores não estão normalizados e você quer ignorar a magnitude.</td>
+                  <td>Google recomenda usar <code>DOT_PRODUCT_DISTANCE + UNIT_L2_NORM</code> em vez disso — mesmo resultado, mais rápido.</td>
+                </tr>
+                <tr>
+                  <td><code>SQUARED_L2_DISTANCE</code></td>
+                  <td>Euclidiana (L2) ao quadrado</td>
+                  <td>Dados numéricos em escala similar, clustering, quando a magnitude importa.</td>
+                  <td>Sensível a vetores com magnitudes muito diferentes.</td>
+                </tr>
+                <tr>
+                  <td><code>L1_DISTANCE</code></td>
+                  <td>Manhattan (L1)</td>
+                  <td>Dados esparsos, quando outliers são comuns.</td>
+                  <td>Menos comum para embeddings de texto.</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">Algoritmos de busca</h3>
+            <table class="field-table">
+              <thead><tr><th>Algoritmo</th><th>Quando usar</th><th>Tradeoff</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Tree-AH</strong> (padrão)</td>
+                  <td>Produção, grandes volumes (&gt;1M vetores). Usa árvore de particionamento + Asymmetric Hashing.</td>
+                  <td>Alta velocidade, recall configurável via <code>fractionLeafNodesToSearch</code>. Requer <code>approximateNeighborsCount</code>.</td>
+                </tr>
+                <tr>
+                  <td><strong>Brute Force</strong></td>
+                  <td>Desenvolvimento, testes de recall, índices pequenos (&lt;10k vetores).</td>
+                  <td>100% de recall, mas lento para grandes volumes. Sem configuração adicional.</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">Filtragem de resultados (Restricts)</h3>
+            <p class="text-slate-600 mb-3">
+              Permite restringir a busca a subconjuntos do índice usando atributos categóricos
+              (<strong>token restricts</strong>) ou numéricos (<strong>numeric restricts</strong>).
+            </p>
+            <div class="tip-box">
+              <strong>Lógica:</strong> AND entre namespaces diferentes, OR dentro do mesmo namespace.<br>
+              Exemplo: <code>{color: red, blue}, {shape: square}</code> = <em>(red OU blue) E (square)</em>
+            </div>
+            <div class="code-block">
+              <pre># Exemplo de query com filtros (Python SDK)
+response = my_index_endpoint.find_neighbors(
+    deployed_index_id="meu-indice-implantado",
+    queries=[[0.1, 0.2, 0.3, ...]],  # vetor de query
+    num_neighbors=10,
+    filter=[
+        # Apenas itens com color=red OU color=blue
+        Namespace("color", allow_tokens=["red", "blue"], deny_tokens=[]),
+        # Excluir itens com shape=circle
+        Namespace("shape", allow_tokens=[], deny_tokens=["circle"]),
+    ],
+    numeric_filter=[
+        # Apenas itens com price < 100
+        NumericNamespace(name="price", value_int=100, op="LESS"),
+    ],
+)</pre>
+            </div>
+
+            <h3 class="section-title">Operadores numéricos disponíveis</h3>
+            <table class="field-table">
+              <thead><tr><th>Operador</th><th>Significado</th></tr></thead>
+              <tbody>
+                <tr><td><code>LESS</code></td><td>Valor do datapoint &lt; valor da query</td></tr>
+                <tr><td><code>LESS_EQUAL</code></td><td>Valor do datapoint &lt;= valor da query</td></tr>
+                <tr><td><code>EQUAL</code></td><td>Valor do datapoint == valor da query</td></tr>
+                <tr><td><code>GREATER_EQUAL</code></td><td>Valor do datapoint &gt;= valor da query</td></tr>
+                <tr><td><code>GREATER</code></td><td>Valor do datapoint &gt; valor da query</td></tr>
+                <tr><td><code>NOT_EQUAL</code></td><td>Valor do datapoint != valor da query</td></tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">Crowding (diversidade de resultados)</h3>
+            <p class="text-slate-600 mb-3">
+              O <strong>crowding tag</strong> limita quantos resultados podem vir de um mesmo "grupo".
+              Por exemplo, em um catálogo de produtos, você pode querer no máximo 2 resultados por marca.
+            </p>
+            <div class="code-block">
+              <pre># Limitar a 2 resultados por crowding_tag
+response = my_index_endpoint.find_neighbors(
+    deployed_index_id="meu-indice",
+    queries=[[0.1, 0.2, ...]],
+    num_neighbors=10,
+    per_crowding_attribute_neighbor_count=2,
+)</pre>
+            </div>
+
+            <h3 class="section-title">Busca Híbrida (Dense + Sparse)</h3>
+            <p class="text-slate-600 mb-3">
+              Combina busca semântica (dense embeddings) com busca por palavras-chave (sparse embeddings)
+              usando o algoritmo <strong>RRF</strong> (Reciprocal Rank Fusion).
+            </p>
+            <div class="code-block">
+              <pre>from vertexai.matching_engine.matching_engine_index_endpoint import HybridQuery
+
+hybrid_query = HybridQuery(
+    dense_embedding=[0.1, 0.2, 0.3, ...],          # embedding semântico
+    sparse_embedding_dimensions=[10, 20, 30],        # dimensões do sparse
+    sparse_embedding_values=[1.0, 0.5, 0.8],         # valores do sparse
+    rrf_ranking_alpha=0.5,  # 0=só sparse, 1=só dense, 0.5=balanceado
+)
+
+response = my_index_endpoint.find_neighbors(
+    deployed_index_id="meu-indice",
+    queries=[hybrid_query],
+    num_neighbors=10,
+)</pre>
+            </div>
+
+            <p class="text-xs text-slate-500 mt-4">
+              Documentação:
+              <a href="https://cloud.google.com/vertex-ai/docs/vector-search/overview" target="_blank" class="ref-link">Vector Search Overview</a> ·
+              <a href="https://cloud.google.com/vertex-ai/docs/vector-search/filtering" target="_blank" class="ref-link">Filtering</a> ·
+              <a href="https://cloud.google.com/vertex-ai/docs/vector-search/query-index-public-endpoint" target="_blank" class="ref-link">Query Index</a>
+            </p>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- PAINEL: ÍNDICE (Criação de um novo índice) -->
+        <!-- ============================================================ -->
+        <div id="panel-indice" class="content-panel">
+          <div class="panel-card">
+            <h2 class="text-2xl font-bold text-slate-800 mb-3">Criar um novo índice</h2>
+            <p class="text-slate-600 mb-4">
+              No Console do Vertex AI (Vector Search), o formulário <strong>Create a new index</strong> permite
+              configurar um índice vetorial que será usado para buscas por similaridade. Abaixo, cada campo
+              do formulário é explicado para você preencher com segurança.
+            </p>
+
+            <h3 class="section-title">Campos principais</h3>
+
+            <table class="field-table">
+              <thead>
+                <tr>
+                  <th style="width:26%">Campo</th>
+                  <th style="width:12%">Obrigatório</th>
+                  <th>Explicação</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Display name</strong> <em>(Nome de exibição)</em></td>
+                  <td><span class="badge badge-red">Sim</span></td>
+                  <td>
+                    Nome pelo qual o índice aparece na lista do console. Use um nome descritivo, por exemplo
+                    <code>vertex-vector-search-spartan-group1</code> ou <code>rag-pdf-index</code>. Serve apenas para
+                    identificação; o ID interno é gerado automaticamente pelo Vertex AI.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Description</strong> <em>(Descrição)</em></td>
+                  <td><span class="badge badge-slate">Não</span></td>
+                  <td>
+                    Texto livre para descrever a finalidade do índice. Ex.: <em>"Índice para RAG do corpus de manuais"</em>.
+                    Ajuda a documentar o recurso para sua equipe.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Region</strong> <em>(Região)</em></td>
+                  <td><span class="badge badge-red">Sim</span></td>
+                  <td>
+                    Região do Google Cloud onde o índice será criado e processado (ex.: <code>us-east1 (South Carolina)</code>,
+                    <code>us-central1</code>, <code>southamerica-east1</code>). Deve ser a <strong>mesma região</strong> do bucket
+                    GCS onde estão os dados vetoriais; caso contrário, a criação pode falhar ou ter custos de transferência.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>GCS folder URI</strong> <em>(URI da pasta GCS)</em></td>
+                  <td><span class="badge badge-red">Sim</span></td>
+                  <td>
+                    Caminho da pasta no Google Cloud Storage onde estão os dados vetoriais. Formato: <code>gs://BUCKET/PASTA/</code>
+                    (ex.: <code>gs://gcs-spartan-rag</code>). A pasta deve conter arquivos no formato suportado (JSON, CSV ou AVRO)
+                    com os embeddings. Use o botão <em>Browse</em> no console para selecionar. Há limite de 5.000 arquivos no diretório raiz.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Algorithm type</strong> <em>(Tipo de algoritmo)</em></td>
+                  <td><span class="badge badge-red">Sim</span></td>
+                  <td>
+                    Algoritmo usado pelo Vector Search para busca eficiente de vizinhos mais próximos.<br>
+                    <strong>Tree-AH algorithm</strong>: recomendado para produção e grandes volumes; usa árvore de particionamento + Asymmetric Hashing,
+                    com recall configurável.<br>
+                    <strong>Brute Force</strong>: busca exata, ideal para desenvolvimento ou índices pequenos (&lt;10k vetores); não exige parâmetros extras.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Dimensions</strong> <em>(Dimensões)</em></td>
+                  <td><span class="badge badge-red">Sim</span></td>
+                  <td>
+                    Número de dimensões dos vetores de entrada (ex.: <code>768</code>). Deve ser <strong>exatamente igual</strong> ao
+                    tamanho do embedding gerado pelo seu modelo (ex.: text-embedding-004 usa 768; outros modelos usam 1536, 3072, etc.).
+                    <strong>Não pode ser alterado após a criação do índice.</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Approximate neighbors count</strong> <em>(Contagem aproximada de vizinhos)</em></td>
+                  <td><span class="badge badge-amber">Tree-AH</span></td>
+                  <td>
+                    Número padrão de vizinhos que a busca aproximada retorna <em>antes</em> da reordenação exata. Ex.: <code>200</code>.
+                    Deve ser maior que o número de vizinhos que você pede na query (<code>num_neighbors</code>). Regra prática: use algo
+                    como 10× o <code>num_neighbors</code> para melhor recall. Valores maiores aumentam recall e latência.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Update method</strong> <em>(Método de atualização)</em></td>
+                  <td><span class="badge badge-red">Sim</span></td>
+                  <td>
+                    <strong>Batch</strong>: você envia dados via GCS em lotes e o índice é reconstruído conforme um agendamento. Ideal para
+                    dados que mudam com pouca frequência.<br>
+                    <strong>Stream</strong>: permite atualizar e consultar o índice em tempo quase real (inserir, atualizar e deletar vetores
+                    via API). Ideal para catálogos dinâmicos ou atualizações frequentes.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Shard size</strong> <em>(Tamanho do shard)</em></td>
+                  <td><span class="badge badge-slate">Não</span></td>
+                  <td>
+                    Os dados do índice são divididos em partes iguais chamadas <em>shards</em>. Este campo define o tamanho de cada shard
+                    (ex.: <code>Small</code>). Shards maiores usam menos nós e mais memória por nó. Opções típicas: Small (até ~500k vetores
+                    de 768 dims), Medium (~5M), Large (~12M). Afeta custo e desempenho; consulte a documentação de preços por tamanho.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">Opções avançadas (Advanced options)</h3>
+            <p class="text-slate-600 mb-3">Configurações adicionais que influenciam a métrica de distância e o comportamento do algoritmo.</p>
+
+            <table class="field-table">
+              <thead>
+                <tr>
+                  <th style="width:28%">Campo</th>
+                  <th style="width:12%">Exemplo</th>
+                  <th>Explicação</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Distance measure type</strong> <em>(Tipo de medida de distância)</em></td>
+                  <td>Dot product distance</td>
+                  <td>
+                    Métrica usada na busca de vizinhos mais próximos. Valor padrão: <strong>Dot product distance</strong>. Equivale ao cosseno
+                    quando os vetores estão normalizados (L2 = 1). Índices esparsos suportam apenas produto escalar. Outras opções: Cosine,
+                    Squared L2, L1 — consulte o painel Vector Search para quando usar cada uma.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Feature norm type</strong> <em>(Tipo de normalização)</em></td>
+                  <td>None</td>
+                  <td>
+                    Tipo de normalização aplicada a cada vetor antes da indexação. Padrão: <strong>None</strong>. Use
+                    <strong>Unit L2 norm</strong> quando quiser que produto escalar se comporte como similaridade de cosseno (recomendado
+                    para embeddings de texto com DOT_PRODUCT_DISTANCE).
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Fraction leaf nodes to search</strong> <em>(Fração de nós folha para buscar)</em></td>
+                  <td>0.05</td>
+                  <td>
+                    Fração dos nós folha que cada consulta pode percorrer. Deve estar no intervalo (0.0, 1.0). Padrão: <code>0.05</code> (5%).
+                    Valores maiores tendem a aumentar o recall e a latência; valores menores deixam a busca mais rápida e podem reduzir o recall.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Leaf node embedding count</strong> <em>(Contagem de embeddings por nó folha)</em></td>
+                  <td>1000</td>
+                  <td>
+                    Número de embeddings armazenados em cada nó folha da árvore. Padrão: <code>1000</code>. Mais embeddings por folha
+                    resultam em árvore menor, mas mais dados são examinados por folha na busca; menos embeddings por folha deixam a árvore
+                    maior e podem melhorar a precisão em alguns cenários.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="tip-box">
+              <strong>Resumo:</strong> Preencha Display name, Region, GCS folder URI, Algorithm type, Dimensions e Update method como obrigatórios.
+              Para Tree-AH, defina Approximate neighbors count. Use Advanced options para ajustar distância, normalização e parâmetros da árvore.
+            </div>
+
+            <p class="text-xs text-slate-500 mt-4">
+              Documentação:
+              <a href="https://cloud.google.com/vertex-ai/docs/vector-search/create-index" target="_blank" class="ref-link">Create an index</a> ·
+              <a href="https://cloud.google.com/vertex-ai/docs/vector-search/overview" target="_blank" class="ref-link">Vector Search Overview</a>
+            </p>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- PAINEL: VECTOR INDEX -->
+        <!-- ============================================================ -->
+        <div id="panel-vector-index" class="content-panel">
+          <div class="panel-card">
+            <h2 class="text-2xl font-bold text-slate-800 mb-3">Vector Index</h2>
+            <p class="text-slate-600 mb-4">
+              Um <strong>Vector Index</strong> é a estrutura de dados que armazena os embeddings (vetores)
+              dos seus itens e permite buscas por similaridade eficientes. É criado a partir de arquivos
+              no Cloud Storage e configurado com parâmetros que definem como a busca será feita.
+            </p>
+
+            <h3 class="section-title">Tela de criação — campos detalhados</h3>
+            <p class="text-slate-600 mb-3">
+              As capturas de tela mostram o formulário "Criar um índice" no Console do Google Cloud.
+              Abaixo, cada campo com seus valores e significados:
+            </p>
+
+            <table class="field-table">
+              <thead>
+                <tr>
+                  <th style="width:22%">Campo</th>
+                  <th style="width:15%">Obrigatório</th>
+                  <th>Descrição e valores aceitos</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Nome de exibição</strong></td>
+                  <td><span class="badge badge-red">Sim</span></td>
+                  <td>Nome legível para identificar o índice na lista. Pode conter letras, números e hifens. Exemplo: <code>rag-pdf-index</code>. O ID interno é gerado automaticamente.</td>
+                </tr>
+                <tr>
+                  <td><strong>Descrição</strong></td>
+                  <td><span class="badge badge-slate">Não</span></td>
+                  <td>Texto livre descrevendo o propósito do índice. Exemplo: <em>"Índice para RAG Corpus com Vector Search"</em>.</td>
+                </tr>
+                <tr>
+                  <td><strong>Região</strong></td>
+                  <td><span class="badge badge-red">Sim</span></td>
+                  <td>Região do Google Cloud onde o índice será criado. Deve ser a mesma região do bucket do GCS com os dados. Exemplo: <code>us-east1</code>, <code>us-central1</code>, <code>southamerica-east1</code>.</td>
+                </tr>
+                <tr>
+                  <td><strong>gs:// URI da pasta do GCS</strong></td>
+                  <td><span class="badge badge-red">Sim</span></td>
+                  <td>
+                    Caminho do Cloud Storage com os arquivos de dados (embeddings). Formato: <code>gs://BUCKET/PASTA/</code>.
+                    A pasta deve conter arquivos <code>.json</code>, <code>.csv</code> ou <code>.avro</code> com os vetores.
+                    Limite: 5.000 arquivos no diretório raiz.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Tipo de algoritmo</strong></td>
+                  <td><span class="badge badge-red">Sim</span></td>
+                  <td>
+                    <strong>Tree-AH</strong> (padrão e recomendado): algoritmo aproximado baseado em árvore + Asymmetric Hashing. Ideal para produção com grandes volumes.<br>
+                    <strong>Brute Force</strong>: busca linear exata. Ideal para testes e índices pequenos (&lt;10k vetores). Não requer configuração adicional.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Dimensões</strong></td>
+                  <td><span class="badge badge-red">Sim</span></td>
+                  <td>
+                    Número de dimensões dos vetores de entrada. Deve corresponder exatamente ao modelo de embedding usado.
+                    Exemplos: <code>768</code> (text-embedding-004, BERT), <code>1536</code> (OpenAI ada-002), <code>3072</code> (text-embedding-3-large).
+                    <strong>Não pode ser alterado após a criação.</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Contagem estimada de vizinhos</strong></td>
+                  <td><span class="badge badge-amber">Tree-AH</span></td>
+                  <td>
+                    (<code>approximateNeighborsCount</code>) Número padrão de vizinhos aproximados a recuperar antes do reranking exato.
+                    Deve ser maior que o <code>num_neighbors</code> da query. Regra: use 10× o <code>num_neighbors</code> para valores pequenos.
+                    Padrão recomendado: <code>150</code>. Valores maiores = maior recall, maior latência.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Método de atualização</strong></td>
+                  <td><span class="badge badge-red">Sim</span></td>
+                  <td>
+                    <strong>Lote</strong> (<code>BATCH_UPDATE</code>): atualização em lote via GCS. O índice é reconstruído periodicamente. Ideal para dados que mudam com pouca frequência.<br>
+                    <strong>Streaming</strong> (<code>STREAM_UPDATE</code>): permite inserir, atualizar e deletar vetores em tempo real via API. Ideal para catálogos dinâmicos.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Tamanho do fragmento</strong></td>
+                  <td><span class="badge badge-slate">Não</span></td>
+                  <td>
+                    (<code>ShardSize</code>) Tamanho de cada shard do índice. Shards maiores = menos nós, mais memória por nó.<br>
+                    <code>SHARD_SIZE_SMALL</code>: 2 GiB/shard — até ~500k vetores de 768 dims.<br>
+                    <code>SHARD_SIZE_MEDIUM</code>: 20 GiB/shard — até ~5M vetores de 768 dims.<br>
+                    <code>SHARD_SIZE_LARGE</code>: 50 GiB/shard — até ~12M vetores de 768 dims.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">Opções avançadas (TreeAhConfig)</h3>
+            <table class="field-table">
+              <thead><tr><th>Campo</th><th>Padrão</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code>fractionLeafNodesToSearch</code></td>
+                  <td>0.05</td>
+                  <td>Fração dos nós folha visitados em cada query (0.0–1.0 exclusivo). Maior = mais recall, mais latência. Exemplo: 0.05 = 5% dos nós folha.</td>
+                </tr>
+                <tr>
+                  <td><code>leafNodeEmbeddingCount</code></td>
+                  <td>1000</td>
+                  <td>Número de embeddings por nó folha. Mais embeddings por folha = árvore menor, mas mais dados examinados por folha.</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">Normalização de vetores (<code>featureNormType</code>)</h3>
+            <table class="field-table">
+              <thead><tr><th>Valor</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr><td><code>NONE</code></td><td>Padrão. Sem normalização. Use quando os vetores já estão normalizados ou quando usa SQUARED_L2_DISTANCE.</td></tr>
+                <tr><td><code>UNIT_L2_NORM</code></td><td>Normaliza cada vetor para norma L2 = 1 antes de indexar. <strong>Recomendado</strong> com DOT_PRODUCT_DISTANCE para equivaler ao cosseno.</td></tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">Formato dos dados de entrada</h3>
+            <p class="text-slate-600 mb-3">Os arquivos no GCS devem seguir um dos formatos abaixo:</p>
+
+            <div class="mb-4">
+              <div class="font-semibold text-slate-700 mb-2">JSON (recomendado)</div>
+              <div class="code-block">
+                <pre>// Dense embedding (vetor denso)
+{"id": "doc-001", "embedding": [0.1, 0.2, 0.3, ...]}
+
+// Sparse embedding (vetor esparso)
+{"id": "doc-002", "sparse_embedding": {"values": [0.1, 0.5], "dimensions": [10, 200]}}
+
+// Hybrid (denso + esparso)
+{"id": "doc-003", "embedding": [0.1, 0.2], "sparse_embedding": {"values": [0.3], "dimensions": [50]}}
+
+// Com filtros (restricts) e crowding
+{
+  "id": "doc-004",
+  "embedding": [0.1, 0.2, 0.3],
+  "restricts": [
+    {"namespace": "categoria", "allow": ["tecnologia", "ia"]},
+    {"namespace": "idioma", "allow": ["pt"]}
+  ],
+  "numeric_restricts": [
+    {"namespace": "ano", "value_int": 2024},
+    {"namespace": "score", "value_float": 0.95}
+  ],
+  "crowding_tag": "fonte-interna"
+}</pre>
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <div class="font-semibold text-slate-700 mb-2">CSV</div>
+              <div class="code-block">
+                <pre># Formato: ID, valores do vetor denso, [sparse dim:valor], [name=value restricts]
+doc-001,0.1,0.2,0.3,categoria=tecnologia,categoria=ia,#ano=2024i,crowding_tag=fonte-interna
+
+# Deletar registros: arquivo na pasta delete/
+# delete/delete_file.txt:
+doc-001
+doc-002</pre>
+              </div>
+            </div>
+
+            <h3 class="section-title">Criar índice via Python SDK</h3>
+            <div class="code-block">
+              <pre>from google.cloud import aiplatform
+
+aiplatform.init(project="SEU_PROJETO", location="us-central1")
+
+# Criar índice Tree-AH com DOT_PRODUCT + normalização L2
+my_index = aiplatform.MatchingEngineIndex.create_tree_ah_index(
+    display_name="meu-indice-producao",
+    contents_delta_uri="gs://meu-bucket/embeddings/",
+    dimensions=768,
+    approximate_neighbors_count=150,
+    distance_measure_type="DOT_PRODUCT_DISTANCE",
+    feature_norm_type="UNIT_L2_NORM",
+    leaf_node_embedding_count=1000,
+    leaf_nodes_to_search_percent=5,
+    description="Índice de produção para busca semântica",
+    shard_size="SHARD_SIZE_MEDIUM",
+)
+print(my_index.resource_name)</pre>
+            </div>
+
+            <h3 class="section-title">Update e rebuild de índice (Batch)</h3>
+            <p class="text-slate-600 mb-2">
+              Em modo <strong>Lote</strong> (<code>BATCH_UPDATE</code>), o índice é atualizado enviando novos arquivos ao GCS e chamando <code>update_embeddings()</code>. Você pode fazer atualização incremental (<code>is_complete_overwrite=False</code>) ou substituição total (<code>True</code>). O rebuild pode levar minutos ou horas conforme o tamanho dos dados; o índice permanece disponível durante o processo em muitas configurações.
+            </p>
+            <div class="code-block">
+              <pre># Atualização incremental (adiciona/atualiza vetores)
+my_index.update_embeddings(
+    contents_delta_uri="gs://meu-bucket/atualizacoes/",
+    is_complete_overwrite=False,  # False = incremental, True = substituição total
+)
+
+# Substituição completa do índice
+my_index.update_embeddings(
+    contents_delta_uri="gs://meu-bucket/novo-corpus-completo/",
+    is_complete_overwrite=True,
+)</pre>
+            </div>
+
+            <h3 class="section-title">Atualização em Streaming (tempo real)</h3>
+            <div class="code-block">
+              <pre># Upsert (inserir ou atualizar) vetores individuais
+my_index.upsert_datapoints(
+    datapoints=[
+        aiplatform.matching_engine.MatchingEngineIndex.Datapoint(
+            datapoint_id="doc-novo-001",
+            feature_vector=[0.1, 0.2, 0.3, ...],
+            restricts=[
+                aiplatform.matching_engine.MatchingEngineIndex.Datapoint.Restriction(
+                    namespace="categoria",
+                    allow_list=["tecnologia"],
+                )
+            ],
+        )
+    ]
+)
+
+# Remover vetores
+my_index.remove_datapoints(datapoint_ids=["doc-001", "doc-002"])</pre>
+            </div>
+
+            <div class="warn-box">
+              <strong>Importante:</strong> O índice precisa estar implantado em um endpoint ativo para que as atualizações de streaming sejam refletidas imediatamente nas queries. Para índices em lote, as atualizações só ficam disponíveis após a reconstrução do índice.
+            </div>
+
+            <h3 class="section-title">Tela de detalhes do índice</h3>
+            <p class="text-slate-600 mb-3">
+              A segunda captura de tela mostra a página "Informações do índice". Os campos exibidos são:
+            </p>
+            <table class="field-table">
+              <thead><tr><th>Campo</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr><td>Nome de exibição</td><td>Nome definido na criação. Editável.</td></tr>
+                <tr><td>ID</td><td>Identificador numérico único gerado pelo sistema. Imutável.</td></tr>
+                <tr><td>Status</td><td><span class="badge badge-green">Pronto</span> = índice criado e disponível para deploy. <span class="badge badge-amber">Atualizando</span> = rebuild em andamento.</td></tr>
+                <tr><td>Contagem de vetores densos/esparsos</td><td>Número de embeddings indexados. Pode mostrar "—" durante a criação inicial.</td></tr>
+                <tr><td>Contagem de fragmentos</td><td>Número de shards criados. Depende do tamanho total dos dados e do <code>ShardSize</code> configurado.</td></tr>
+                <tr><td>Tipo de algoritmo</td><td><code>tree-AH</code> ou <code>brute-force</code>.</td></tr>
+                <tr><td>Dimensões</td><td>Número de dimensões configurado (ex.: 768). Imutável.</td></tr>
+                <tr><td>Contagem estimada de vizinhos</td><td>Valor de <code>approximateNeighborsCount</code> configurado.</td></tr>
+                <tr><td>Método de atualização</td><td><code>Lote</code> ou <code>Streaming</code>.</td></tr>
+                <tr><td>Tamanho do fragmento</td><td><code>Pequeno</code>, <code>Médio</code> ou <code>Grande</code>.</td></tr>
+                <tr><td>Tipo de medição de distância</td><td>Métrica configurada (ex.: <em>Distância do produto escalar</em>).</td></tr>
+                <tr><td>Tipo de normalização do recurso</td><td><code>Nenhum</code> ou <code>UNIT_L2_NORM</code>.</td></tr>
+                <tr><td>Nós de folhas de fração a serem pesquisados</td><td>Valor de <code>fractionLeafNodesToSearch</code> (ex.: 0.05).</td></tr>
+                <tr><td>Contagem de embeddings de nós de folha</td><td>Valor de <code>leafNodeEmbeddingCount</code> (ex.: 1.000).</td></tr>
+                <tr><td>Criado em / Última atualização</td><td>Timestamps de criação e última modificação.</td></tr>
+                <tr><td>Índices implantados</td><td>Lista de endpoints onde este índice está implantado. Botão "+ Implantar no endpoint".</td></tr>
+              </tbody>
+            </table>
+
+            <p class="text-xs text-slate-500 mt-4">
+              Documentação:
+              <a href="https://cloud.google.com/vertex-ai/docs/vector-search/create-manage-index" target="_blank" class="ref-link">Create and manage index</a> ·
+              <a href="https://cloud.google.com/vertex-ai/docs/vector-search/update-rebuild-index" target="_blank" class="ref-link">Update and rebuild index</a> ·
+              <a href="https://cloud.google.com/vertex-ai/docs/vector-search/configuring-indexes" target="_blank" class="ref-link">Index configuration parameters</a> ·
+              <a href="https://cloud.google.com/vertex-ai/docs/vector-search/setup/format-structure" target="_blank" class="ref-link">Input data format</a> ·
+              <a href="https://cloud.google.com/vertex-ai/docs/vector-search/about-hybrid-search" target="_blank" class="ref-link">About hybrid search</a>
+            </p>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- PAINEL: CRIAR ENDPOINT DE ÍNDICE (campos do formulário) -->
+        <!-- ============================================================ -->
+        <div id="panel-endpoint-criar" class="content-panel">
+          <div class="panel-card">
+            <h2 class="text-2xl font-bold text-slate-800 mb-3">Criar um endpoint de índice</h2>
+            <p class="text-slate-600 mb-4">
+              No console do Vertex AI (Vector Search), o formulário <strong>Criar um endpoint de índice</strong>
+              permite provisionar o recurso que receberá o deploy dos seus índices vetoriais. Abaixo, cada campo
+              e cada opção de acesso são explicados. <strong>Importante:</strong> a forma de acesso ao endpoint
+              <em>não pode ser alterada após a criação</em> — escolha com cuidado.
+            </p>
+
+            <h3 class="section-title">Campos do formulário</h3>
+
+            <table class="field-table">
+              <thead>
+                <tr>
+                  <th style="width:24%">Campo / Seção</th>
+                  <th style="width:12%">Obrigatório</th>
+                  <th>Explicação</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Nome de exibição</strong></td>
+                  <td><span class="badge badge-red">Sim</span></td>
+                  <td>
+                    Nome pelo qual o endpoint aparecerá na lista do console. Use um nome descritivo (ex.:
+                    <code>vector-search-endpoint-prod</code>). O asterisco indica preenchimento obrigatório.
+                    Esse nome ajuda a identificar o recurso quando houver vários endpoints no projeto.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Local — Região</strong></td>
+                  <td><span class="badge badge-red">Sim</span></td>
+                  <td>
+                    Região do Google Cloud onde o endpoint será provisionado. Ex.: <code>us-east1 (Carolina do Sul)</code>,
+                    <code>us-central1</code>, <code>southamerica-east1</code>. O endpoint e os índices implantados nele
+                    devem estar na mesma região para consultas funcionarem. Escolha uma região próxima aos seus usuários ou
+                    ao restante da sua infraestrutura.
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="3" style="background: #f1f5f9; font-weight: 600; color: #334155;">
+                    Seção <strong>Acesse</strong> — determina como o endpoint pode ser acessado. Não será possível alterar após a criação.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Padrão</strong></td>
+                  <td><span class="badge badge-slate">Opção</span></td>
+                  <td>
+                    <strong>Disponibiliza o endpoint usando uma API REST.</strong> O endpoint fica acessível pela internet
+                    via HTTPS (API REST pública). Mais simples de configurar e ideal para protótipos, desenvolvimento ou
+                    quando não há requisitos de rede privada. As chamadas são autenticadas (ex.: Google Cloud IAM, API Key).
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Private Service Connect (recomendado)</strong></td>
+                  <td><span class="badge badge-slate">Opção</span></td>
+                  <td>
+                    <strong>Cria uma conexão particular com o endpoint usando Private Service Connect em uma rede VPC.</strong>
+                    O tráfego não sai pela internet pública; a comunicação ocorre dentro da sua VPC. Recomendado para produção
+                    e ambientes corporativos, onde segurança e isolamento de rede são importantes. Exige configuração de
+                    Private Service Connect e de um endpoint de serviço na VPC.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Acesso a serviços particulares</strong></td>
+                  <td><span class="badge badge-slate">Opção</span></td>
+                  <td>
+                    <strong>Cria uma conexão particular com o endpoint usando uma rede VPC e o acesso a serviços particulares.</strong>
+                    Outro modo de acesso privado, baseado no recurso de “Private Google Access” / serviços particulares na VPC.
+                    Use quando sua política de rede exigir esse modelo em vez do Private Service Connect. Consulte a
+                    documentação para requisitos de DNS e de rede.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="warn-box">
+              <strong>Atenção:</strong> A forma de acesso (público REST, Private Service Connect ou acesso a serviços particulares)
+              <strong>não pode ser alterada depois que o endpoint for criado</strong>. Se precisar mudar, será necessário
+              criar um novo endpoint e implantar os índices novamente.
+            </div>
+
+            <div class="tip-box">
+              <strong>Resumo:</strong> Preencha o <strong>Nome de exibição</strong> e escolha a <strong>Região</strong>. Em <strong>Acesse</strong>,
+              escolha Padrão (API REST pública), Private Service Connect (recomendado para produção) ou Acesso a serviços particulares.
+              Em seguida, use <em>Criar</em> para provisionar o endpoint; depois, implante os índices na seção "Endpoint do índice".
+            </div>
+
+            <p class="text-xs text-slate-500 mt-4">
+              Documentação:
+              <a href="https://cloud.google.com/vertex-ai/docs/vector-search/create-deploy-index" target="_blank" class="ref-link">Create and deploy an index</a> ·
+              <a href="https://cloud.google.com/vertex-ai/docs/vector-search/setup-vpc" target="_blank" class="ref-link">VPC e Private Service Connect</a>
+            </p>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- PAINEL: ENDPOINT DO ÍNDICE -->
+        <!-- ============================================================ -->
+        <div id="panel-endpoint" class="content-panel">
+          <div class="panel-card">
+            <h2 class="text-2xl font-bold text-slate-800 mb-3">Endpoint do índice</h2>
+            <p class="text-slate-600 mb-4">
+              Um <strong>Index Endpoint</strong> é o recurso que expõe um ou mais índices vetoriais para
+              consultas. Para usar o Vector Search, você precisa: (1) criar um endpoint, (2) implantar
+              (deploy) um índice nele, (3) enviar queries para o endpoint.
+            </p>
+
+            <h3 class="section-title">Tipos de endpoint</h3>
+            <table class="field-table">
+              <thead><tr><th>Tipo</th><th>Acesso</th><th>Quando usar</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Endpoint público</strong></td>
+                  <td>HTTPS público com autenticação IAM. Domínio: <code>NÚMERO.REGIÃO-PROJETO.vdb.vertexai.goog</code></td>
+                  <td>Aplicações que precisam acessar de fora da VPC, Cloud Run, Cloud Functions, ambientes externos.</td>
+                </tr>
+                <tr>
+                  <td><strong>Endpoint privado (VPC)</strong></td>
+                  <td>Acessível apenas dentro da VPC via VPC Peering. IP interno.</td>
+                  <td>Produção com requisitos de segurança, menor latência, GKE, Compute Engine na mesma VPC.</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">Tela "Implantar índice" — campos detalhados</h3>
+            <p class="text-slate-600 mb-3">
+              A terceira captura mostra o diálogo de implantação. Campos:
+            </p>
+            <table class="field-table">
+              <thead><tr><th>Campo</th><th>Obrigatório</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Nome de exibição</strong></td>
+                  <td><span class="badge badge-red">Sim</span></td>
+                  <td>Nome do índice implantado (<code>DeployedIndex</code>). O ID é gerado com base nesse nome e <strong>não pode ser alterado depois</strong>. Use nomes descritivos como <code>rag-pdf-v1</code>.</td>
+                </tr>
+                <tr>
+                  <td><strong>Endpoint</strong></td>
+                  <td><span class="badge badge-red">Sim</span></td>
+                  <td>Endpoint onde o índice será implantado. Pode ser um existente ou criar um novo. Um endpoint pode ter múltiplos índices implantados simultaneamente.</td>
+                </tr>
+                <tr>
+                  <td><strong>Tipo de máquina</strong></td>
+                  <td><span class="badge badge-slate">Não</span></td>
+                  <td>
+                    Tipo de VM para servir o índice. Opções disponíveis:<br>
+                    <strong>Padrão:</strong><br>
+                    &nbsp;• <code>n1-standard-16</code>: 16 vCPUs, 60 GiB RAM — uso geral<br>
+                    &nbsp;• <code>n1-standard-32</code>: 32 vCPUs, 120 GiB RAM — alto throughput<br>
+                    &nbsp;• <code>e2-standard-16</code>: 16 vCPUs, 64 GiB RAM — custo-benefício<br>
+                    &nbsp;• <code>n2d-standard-32</code>: 32 vCPUs, 128 GiB RAM — AMD, bom custo<br>
+                    <strong>Memória elevada:</strong> para índices muito grandes que precisam de mais RAM.<br>
+                    Se não especificado, o padrão é <code>n1-standard-16</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Réplicas mínimas</strong></td>
+                  <td><span class="badge badge-slate">Não</span></td>
+                  <td>Número mínimo de réplicas (nós) sempre ativas. Padrão: 2. Mais réplicas = maior disponibilidade e throughput, mas maior custo.</td>
+                </tr>
+                <tr>
+                  <td><strong>Réplicas máximas</strong></td>
+                  <td><span class="badge badge-slate">Não</span></td>
+                  <td>Número máximo de réplicas para autoscaling. O sistema escala automaticamente entre mínimo e máximo conforme a carga.</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">Criar endpoint e implantar índice (Python)</h3>
+            <div class="code-block">
+              <pre>from google.cloud import aiplatform
+
+aiplatform.init(project="SEU_PROJETO", location="us-central1")
+
+# 1. Criar endpoint público
+my_index_endpoint = aiplatform.MatchingEngineIndexEndpoint.create(
+    display_name="meu-endpoint-producao",
+    description="Endpoint público para busca semântica",
+    public_endpoint_enabled=True,  # True = público, False = privado VPC
+)
+
+# 2. Implantar índice no endpoint
+my_index_endpoint.deploy_index(
+    index=my_index,
+    deployed_index_id="rag-pdf-v1",  # ID único, imutável
+    display_name="RAG PDF v1",
+    machine_type="n1-standard-16",
+    min_replica_count=2,
+    max_replica_count=10,
+)
+
+print(my_index_endpoint.public_endpoint_domain_name)
+# Saída: 1234567890.us-central1-123456789.vdb.vertexai.goog</pre>
+            </div>
+
+            <h3 class="section-title">Consultar o endpoint (Python SDK)</h3>
+            <div class="code-block">
+              <pre>from google.cloud import aiplatform
+
+aiplatform.init(project="SEU_PROJETO", location="us-central1")
+
+# Referenciar endpoint existente
+my_index_endpoint = aiplatform.MatchingEngineIndexEndpoint(
+    index_endpoint_name="projects/PROJETO/locations/REGIAO/indexEndpoints/ID"
+)
+
+# Query simples: top-10 vizinhos mais próximos
+results = my_index_endpoint.find_neighbors(
+    deployed_index_id="rag-pdf-v1",
+    queries=[[0.1, 0.2, 0.3, ...]],  # lista de vetores de query
+    num_neighbors=10,
+)
+
+for neighbor in results[0]:
+    print(f"ID: {neighbor.id}, Distância: {neighbor.distance}")</pre>
+            </div>
+
+            <h3 class="section-title">Consultar o endpoint (REST / curl)</h3>
+            <div class="code-block">
+              <pre># Endpoint público — findNeighbors
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  https://NUMERO.REGIAO-PROJETO.vdb.vertexai.goog/v1/projects/PROJETO/locations/REGIAO/indexEndpoints/ENDPOINT_ID:findNeighbors \
+  -d '{
+    "deployed_index_id": "rag-pdf-v1",
+    "queries": [{
+      "datapoint": {
+        "datapoint_id": "query-1",
+        "feature_vector": [0.1, 0.2, 0.3, ...]
+      },
+      "neighbor_count": 10
+    }]
+  }'
+
+# Resposta:
+# {
+#   "nearestNeighbors": [{
+#     "id": "query-1",
+#     "neighbors": [
+#       {"datapoint": {"datapointId": "doc-001"}, "distance": 0.12},
+#       {"datapoint": {"datapointId": "doc-042"}, "distance": 0.18},
+#       ...
+#     ]
+#   }]
+# }</pre>
+            </div>
+
+            <h3 class="section-title">Consulta com filtros (REST)</h3>
+            <div class="code-block">
+              <pre>curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  https://${PUBLIC_ENDPOINT_DOMAIN}/v1/projects/${PROJECT_ID}/locations/${LOCATION}/indexEndpoints/${ENDPOINT_ID}:findNeighbors \
+  -d '{
+    "deployed_index_id": "rag-pdf-v1",
+    "queries": [{
+      "datapoint": {
+        "datapoint_id": "q1",
+        "feature_vector": [0.1, 0.2, 0.3],
+        "restricts": [
+          {"namespace": "categoria", "allow_list": ["tecnologia"]}
+        ],
+        "numeric_restricts": [
+          {"namespace": "ano", "value_int": 2023, "op": "GREATER_EQUAL"},
+          {"namespace": "ano", "value_int": 2025, "op": "LESS"}
+        ]
+      },
+      "neighbor_count": 5
+    }]
+  }'</pre>
+            </div>
+
+            <h3 class="section-title">Parâmetros de performance em tempo de query</h3>
+            <table class="field-table">
+              <thead><tr><th>Parâmetro</th><th>API</th><th>Impacto</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code>num_neighbors</code> / <code>neighbor_count</code></td>
+                  <td>Por query</td>
+                  <td>Número de resultados retornados. Valores até 300 são performáticos na maioria dos casos. Para valores maiores, teste com sua carga.</td>
+                </tr>
+                <tr>
+                  <td><code>approximateNeighborsCount</code> / <code>approximate_neighbor_count</code></td>
+                  <td>Por query (override)</td>
+                  <td>Quantos vizinhos aproximados recuperar antes do reranking. Deve ser &gt; <code>num_neighbors</code>. Regra: 10× para valores pequenos. Aumentar = mais recall, mais latência.</td>
+                </tr>
+                <tr>
+                  <td><code>fractionLeafNodesToSearch</code> / <code>fraction_leaf_nodes_to_search_override</code></td>
+                  <td>Por query (override)</td>
+                  <td>Fração dos nós folha visitados (0.0–1.0). Override do valor configurado no índice. Aumentar = mais recall, mais latência e custo.</td>
+                </tr>
+                <tr>
+                  <td><code>per_crowding_attribute_neighbor_count</code></td>
+                  <td>Por query</td>
+                  <td>Máximo de resultados com o mesmo crowding_tag. Aumenta diversidade dos resultados.</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">Ler datapoints específicos</h3>
+            <div class="code-block">
+              <pre># Recuperar vetores por ID (útil para debug)
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  https://${PUBLIC_ENDPOINT_DOMAIN}/v1/projects/${PROJECT_ID}/locations/${LOCATION}/indexEndpoints/${ENDPOINT_ID}:readIndexDatapoints \
+  -d '{
+    "deployed_index_id": "rag-pdf-v1",
+    "ids": ["doc-001", "doc-042"]
+  }'</pre>
+            </div>
+
+            <h3 class="section-title">Gerenciar índices implantados</h3>
+            <div class="code-block">
+              <pre># Listar índices implantados no endpoint
+my_index_endpoint = aiplatform.MatchingEngineIndexEndpoint(
+    index_endpoint_name="projects/.../indexEndpoints/..."
+)
+print(my_index_endpoint.deployed_indexes)
+
+# Remover índice do endpoint (undeploy)
+my_index_endpoint.undeploy_index(deployed_index_id="rag-pdf-v1")
+
+# Deletar endpoint (deve estar sem índices implantados)
+my_index_endpoint.delete(force=True)</pre>
+            </div>
+
+            <div class="tip-box">
+              <strong>Dica de custo:</strong> O custo do Vector Search é baseado no número de réplicas × tipo de máquina × horas ativas. Para ambientes de desenvolvimento, use <code>min_replica_count=1</code> e remova o índice do endpoint quando não estiver em uso.
+            </div>
+
+            <p class="text-xs text-slate-500 mt-4">
+              Documentação:
+              <a href="https://cloud.google.com/vertex-ai/docs/vector-search/deploy-index-public" target="_blank" class="ref-link">Deploy index (público)</a> ·
+              <a href="https://cloud.google.com/vertex-ai/docs/vector-search/deploy-index-vpc" target="_blank" class="ref-link">Deploy index (VPC)</a> ·
+              <a href="https://cloud.google.com/vertex-ai/docs/vector-search/query-index-public-endpoint" target="_blank" class="ref-link">Query index</a>
+            </p>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- PAINEL: CRIAR BUCKET (GCS) -->
+        <!-- ============================================================ -->
+        <div id="panel-bucket" class="content-panel">
+          <div class="panel-card">
+            <h2 class="text-2xl font-bold text-slate-800 mb-3">Criar um bucket (Cloud Storage)</h2>
+            <p class="text-slate-600 mb-4">
+              No Google Cloud Console, a tela <strong>Criar um bucket</strong> do Cloud Storage é dividida em várias etapas.
+              Abaixo, cada seção e cada opção são explicadas para você configurar o bucket com segurança — inclusive para uso com
+              Vector Search (pasta GCS onde ficam os dados vetoriais do índice).
+            </p>
+
+            <h3 class="section-title">1. Comece já — Nome e marcadores</h3>
+            <table class="field-table">
+              <thead><tr><th style="width:28%">Item</th><th>Explicação</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Nome do bucket</strong></td>
+                  <td>
+                    Nome globalmente único no Google Cloud. Exemplos: <code>exemplo</code>, <code>exemplo_intervalo-1</code>, <code>exemplo.com</code>.
+                    Siga as <em>Diretrizes de nomenclatura</em> (somente letras minúsculas, números, hífens e underscores; 3–63 caracteres).
+                    <strong>Dica:</strong> não inclua informações confidenciais no nome — ele aparece em URLs e logs.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Marcadores (opcional)</strong></td>
+                  <td>
+                    Labels (chave-valor) para organizar e filtrar buckets na lista e em relatórios (ex.: <code>ambiente=producao</code>, <code>projeto=rag</code>).
+                    Útil para custos e políticas da organização.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">2. Escolha onde armazenar seus dados</h3>
+            <p class="text-slate-600 mb-2">Define a localização dos dados; afeta custo, desempenho e disponibilidade. <strong>Não pode ser alterada após a criação.</strong></p>
+            <table class="field-table">
+              <thead><tr><th style="width:28%">Item</th><th>Explicação</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Tipo de local — Multi-region</strong></td>
+                  <td>Maior disponibilidade em uma área ampla (ex.: <code>US</code>, <code>EU</code>). Ideal para dados que precisam de redundância geográfica.</td>
+                </tr>
+                <tr>
+                  <td><strong>Tipo de local — Dual-region</strong></td>
+                  <td>Alta disponibilidade e baixa latência em duas regiões. Bom equilíbrio entre custo e resiliência.</td>
+                </tr>
+                <tr>
+                  <td><strong>Tipo de local — Region</strong></td>
+                  <td>Latência mais baixa em uma única região (ex.: <code>us-east1 (Carolina do Sul)</code>). Recomendado para Vector Search: use a <strong>mesma região</strong> do índice e do endpoint.</td>
+                </tr>
+                <tr>
+                  <td><strong>Região (dropdown)</strong></td>
+                  <td>Se você escolheu Region ou Dual-region, selecione a região (ou par). Para RAG/Vector Search, alinhe com <code>us-central1</code>, <code>us-east1</code>, <code>southamerica-east1</code>, etc.</td>
+                </tr>
+                <tr>
+                  <td><strong>Replicação entre buckets (Transfer Service)</strong></td>
+                  <td>Checkbox opcional: replica dados para outro bucket conforme são adicionados ou alterados. Permite ter o mesmo conteúdo em outro bucket com classe ou região diferente.</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">3. Escolha como armazenar seus dados</h3>
+            <p class="text-slate-600 mb-2">A classe de armazenamento impacta custo, recuperação e operações. Escolha entre gerenciamento automático ou uma classe padrão fixa.</p>
+            <table class="field-table">
+              <thead><tr><th style="width:28%">Item</th><th>Explicação</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Autoclass</strong></td>
+                  <td>Transfere automaticamente cada objeto para Standard ou Nearline conforme a atividade. Recomendado quando a frequência de uso é imprevisível. Pode ser alterado para classe padrão depois.</td>
+                </tr>
+                <tr>
+                  <td><strong>Definir uma classe padrão</strong></td>
+                  <td>Aplica a classe escolhida a todos os objetos do bucket (a menos que você mude por objeto ou use regras de ciclo de vida). Recomendado quando o uso é previsível.</td>
+                </tr>
+                <tr>
+                  <td><strong>Standard</strong></td>
+                  <td>Melhor para dados acessados com frequência e armazenamento de curto prazo. Custo maior por GB, sem taxa de recuperação. Ideal para dados de ingestão e índices Vector Search em uso ativo.</td>
+                </tr>
+                <tr>
+                  <td><strong>Nearline</strong></td>
+                  <td>Para backups e dados acessados menos de uma vez por mês. Custo de armazenamento menor, com taxa de acesso.</td>
+                </tr>
+                <tr>
+                  <td><strong>Coldline</strong></td>
+                  <td>Recuperação de desastres e dados acessados menos de uma vez por trimestre. Armazenamento mais barato, maior custo de recuperação.</td>
+                </tr>
+                <tr>
+                  <td><strong>Archive</strong></td>
+                  <td>Preservação digital a longo prazo; dados acessados menos de uma vez por ano. Menor custo de armazenamento, maior custo e latência de recuperação.</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">4. Escolha como controlar o acesso a objetos</h3>
+            <table class="field-table">
+              <thead><tr><th style="width:28%">Item</th><th>Explicação</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Impedir acesso público</strong></td>
+                  <td>
+                    <em>Aplicar a prevenção do acesso público neste bucket</em>: impede que os dados sejam acessados publicamente pela internet e que o bucket seja usado para hospedagem web.
+                    Recomendado para dados internos e para buckets de RAG/Vector Search (os dados são acessados apenas por serviços autorizados, ex.: Vertex AI).
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Controle de acesso — Uniforme</strong></td>
+                  <td>
+                    Permissões definidas apenas no nível do bucket via IAM; aplicadas uniformemente a todos os objetos. Mais simples e alinhado às boas práticas.
+                    <strong>Importante:</strong> após ativado, torna-se permanente após 90 dias. Muitas organizações exigem essa opção.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Controle de acesso — Detalhado</strong></td>
+                  <td>
+                    Permite ACLs (listas de controle de acesso) por objeto, além do IAM no bucket. Controle mais granular, porém mais complexo. Use apenas se precisar de permissões diferentes por objeto.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3 class="section-title">5. Escolha como proteger os dados do objeto</h3>
+            <p class="text-slate-600 mb-2">Camadas extras de segurança e recuperação além da proteção padrão do Cloud Storage.</p>
+            <table class="field-table">
+              <thead><tr><th style="width:28%">Item</th><th>Explicação</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Política de exclusão reversível</strong></td>
+                  <td>
+                    Permite recuperar objetos e o bucket após uma exclusão. Objetos excluídos são retidos por um período. <strong>Duração padrão:</strong> 7 dias (ou o valor definido pela organização). <strong>Personalizada:</strong> defina outro período; duração 0 desativa a exclusão reversível (exclusões permanentes).
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Controle de versões do objeto</strong></td>
+                  <td>
+                    Mantém várias versões de um objeto; permite restaurar versões substituídas ou excluídas. Para custos, limite o número de versões não atuais e use regras de ciclo de vida para expirar versões antigas.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Retenção</strong></td>
+                  <td>
+                    Impede exclusão ou modificação de objetos por um período predefinido. Usado para conformidade regulatória (compliance).
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Criptografia de dados</strong></td>
+                  <td>
+                    Seção opcional para configurar chaves de criptografia. Por padrão, o GCS usa criptografia gerenciada pelo Google; é possível usar chaves próprias (CSEK/CMEK) para requisitos de compliance.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="tip-box">
+              <strong>Para Vector Search / RAG:</strong> crie o bucket na mesma região do índice e do endpoint; use classe <strong>Standard</strong> para dados em uso ativo; ative <strong>impedir acesso público</strong> e prefira <strong>acesso uniforme</strong>. A pasta GCS (<code>gs://bucket/pasta/</code>) será informada na criação do Vector Index.
+            </div>
+
+            <p class="text-xs text-slate-500 mt-4">
+              Documentação:
+              <a href="https://cloud.google.com/storage/docs/creating-buckets" target="_blank" class="ref-link">Creating buckets</a> ·
+              <a href="https://cloud.google.com/storage/docs/locations" target="_blank" class="ref-link">Bucket locations</a> ·
+              <a href="https://cloud.google.com/storage/docs/storage-classes" target="_blank" class="ref-link">Storage classes</a>
+            </p>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- PAINEL: CALCULADORA DE CUSTOS -->
+        <!-- ============================================================ -->
+        <div id="panel-custos" class="content-panel">
+          <div class="panel-card">
+            <h2 class="text-2xl font-bold text-slate-800 mb-1">Calculadora de Custos — Vertex AI</h2>
+            <p class="text-slate-500 text-sm mb-4">Estimativa mensal baseada nos preços oficiais do Google Cloud (us-central1 · USD). Os valores são aproximados.</p>
+
+            <!-- ── SEÇÃO 1: VECTOR INDEX ── -->
+            <h3 class="text-base font-bold text-slate-700 mb-3 mt-2 border-b border-slate-200 pb-1">1. Vector Index — Construção / Atualização</h3>
+            <div class="grid md:grid-cols-3 gap-3 mb-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Nº de vetores</label>
+                <input id="c-num-vectors" type="number" value="1000000" min="1"
+                  class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  oninput="calcCustos()">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Dimensões do vetor</label>
+                <input id="c-dims" type="number" value="768" min="1"
+                  class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  oninput="calcCustos()">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Atualizações/mês (batch)</label>
+                <input id="c-updates" type="number" value="4" min="0"
+                  class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  oninput="calcCustos()">
+              </div>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded p-3 text-sm text-slate-700 mb-4">
+              <div class="flex justify-between mb-1">
+                <span>Tamanho dos dados <span class="text-slate-400 text-xs">(vetores × dims × 4 bytes)</span></span>
+                <span id="r-data-size" class="font-mono font-semibold">—</span>
+              </div>
+              <div class="flex justify-between mb-1">
+                <span>Custo de construção <span class="text-slate-400 text-xs">($3,00/GiB × atualizações)</span></span>
+                <span id="r-build-cost" class="font-mono font-semibold text-blue-700">—</span>
+              </div>
+            </div>
+
+            <!-- ── SEÇÃO 2: ENDPOINT (SERVING) ── -->
+            <h3 class="text-base font-bold text-slate-700 mb-3 border-b border-slate-200 pb-1">2. Endpoint — Serving (nó/hora)</h3>
+            <div class="grid md:grid-cols-3 gap-3 mb-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Tipo de máquina</label>
+                <select id="c-machine" class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  onchange="calcCustos()">
+                  <option value="0.0938084">e2-standard-2 — $0,094/h</option>
+                  <option value="0.7504672" selected>e2-standard-16 — $0,750/h</option>
+                  <option value="1.012368">e2-highmem-16 — $1,012/h</option>
+                  <option value="1.8926208">n2d-standard-32 — $1,893/h</option>
+                  <option value="1.0639944">n1-standard-16 — $1,064/h</option>
+                  <option value="2.1279888">n1-standard-32 — $2,128/h</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Nº de réplicas (nós)</label>
+                <input id="c-replicas" type="number" value="2" min="1"
+                  class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  oninput="calcCustos()">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Horas ativas/mês</label>
+                <input id="c-hours" type="number" value="730" min="1" max="744"
+                  class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  oninput="calcCustos()">
+              </div>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded p-3 text-sm text-slate-700 mb-4">
+              <div class="flex justify-between">
+                <span>Custo de serving <span class="text-slate-400 text-xs">(máquina × réplicas × horas)</span></span>
+                <span id="r-serve-cost" class="font-mono font-semibold text-blue-700">—</span>
+              </div>
+            </div>
+
+            <!-- ── SEÇÃO 3: EMBEDDING ── -->
+            <h3 class="text-base font-bold text-slate-700 mb-3 border-b border-slate-200 pb-1">3. Geração de Embeddings</h3>
+            <div class="grid md:grid-cols-3 gap-3 mb-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Modelo de embedding</label>
+                <select id="c-emb-model" class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  onchange="calcCustos()">
+                  <option value="0.000025" selected>text-embedding-004 — $0,000025/1k tokens</option>
+                  <option value="0.000025">text-multilingual-embedding-002 — $0,000025/1k tokens</option>
+                  <option value="0.00012">Gemini Embedding (batch) — $0,00012/1k tokens</option>
+                  <option value="0.00015">Gemini Embedding (online) — $0,00015/1k tokens</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Tokens por documento (média)</label>
+                <input id="c-tokens-per-doc" type="number" value="512" min="1"
+                  class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  oninput="calcCustos()">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Documentos/mês a embedar</label>
+                <input id="c-docs-month" type="number" value="10000" min="0"
+                  class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  oninput="calcCustos()">
+              </div>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded p-3 text-sm text-slate-700 mb-4">
+              <div class="flex justify-between">
+                <span>Custo de embedding <span class="text-slate-400 text-xs">(docs × tokens/doc ÷ 1000 × preço)</span></span>
+                <span id="r-emb-cost" class="font-mono font-semibold text-blue-700">—</span>
+              </div>
+            </div>
+
+            <!-- ── SEÇÃO 4: LLM (RAG) ── -->
+            <h3 class="text-base font-bold text-slate-700 mb-3 border-b border-slate-200 pb-1">4. LLM — Geração de Respostas (RAG)</h3>
+            <div class="grid md:grid-cols-2 gap-3 mb-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Modelo LLM</label>
+                <select id="c-llm" class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  onchange="calcCustos()">
+                  <option value="0.1,0.4" selected>Gemini 2.0 Flash — $0,10 in / $0,40 out (por 1M tok)</option>
+                  <option value="0.3,2.5">Gemini 2.5 Flash — $0,30 in / $2,50 out (por 1M tok)</option>
+                  <option value="1.25,10">Gemini 2.5 Pro — $1,25 in / $10,00 out (por 1M tok)</option>
+                  <option value="0.5,3">Gemini 2.0 Flash-Lite — $0,50 in / $3,00 out (por 1M tok)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Requisições/mês</label>
+                <input id="c-reqs" type="number" value="5000" min="0"
+                  class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  oninput="calcCustos()">
+              </div>
+            </div>
+            <div class="grid md:grid-cols-2 gap-3 mb-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Tokens de entrada/req <span class="text-slate-400">(prompt + contexto RAG)</span></label>
+                <input id="c-in-tokens" type="number" value="2000" min="1"
+                  class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  oninput="calcCustos()">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Tokens de saída/req <span class="text-slate-400">(resposta gerada)</span></label>
+                <input id="c-out-tokens" type="number" value="500" min="1"
+                  class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  oninput="calcCustos()">
+              </div>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded p-3 text-sm text-slate-700 mb-4">
+              <div class="flex justify-between mb-1">
+                <span>Custo de entrada LLM</span>
+                <span id="r-llm-in" class="font-mono font-semibold text-blue-700">—</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Custo de saída LLM</span>
+                <span id="r-llm-out" class="font-mono font-semibold text-blue-700">—</span>
+              </div>
+            </div>
+
+            <!-- ── SEÇÃO 5: CLOUD STORAGE ── -->
+            <h3 class="text-base font-bold text-slate-700 mb-3 border-b border-slate-200 pb-1">5. Cloud Storage (GCS)</h3>
+            <div class="grid md:grid-cols-2 gap-3 mb-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Armazenamento total (GB)</label>
+                <input id="c-gcs-gb" type="number" value="10" min="0"
+                  class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  oninput="calcCustos()">
+              </div>
+              <div class="flex items-end">
+                <p class="text-xs text-slate-500">Standard Storage: $0,020/GB/mês (us-central1). Inclui os arquivos de embeddings, documentos e backups.</p>
+              </div>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded p-3 text-sm text-slate-700 mb-4">
+              <div class="flex justify-between">
+                <span>Custo de armazenamento GCS</span>
+                <span id="r-gcs-cost" class="font-mono font-semibold text-blue-700">—</span>
+              </div>
+            </div>
+
+            <!-- ── TOTAL ── -->
+            <div class="bg-blue-600 rounded-xl p-4 text-white mt-2">
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="text-sm font-semibold opacity-80 mb-1">Estimativa total mensal</div>
+                  <div class="text-xs opacity-60">Construção + Serving + Embedding + LLM + GCS</div>
+                </div>
+                <div id="r-total" class="text-3xl font-bold font-mono">—</div>
+              </div>
+              <div class="mt-3 grid grid-cols-5 gap-1 text-center text-xs">
+                <div class="bg-white/10 rounded p-1.5">
+                  <div class="opacity-70 mb-0.5">Índice</div>
+                  <div id="r-pct-build" class="font-semibold">—</div>
+                </div>
+                <div class="bg-white/10 rounded p-1.5">
+                  <div class="opacity-70 mb-0.5">Serving</div>
+                  <div id="r-pct-serve" class="font-semibold">—</div>
+                </div>
+                <div class="bg-white/10 rounded p-1.5">
+                  <div class="opacity-70 mb-0.5">Embedding</div>
+                  <div id="r-pct-emb" class="font-semibold">—</div>
+                </div>
+                <div class="bg-white/10 rounded p-1.5">
+                  <div class="opacity-70 mb-0.5">LLM</div>
+                  <div id="r-pct-llm" class="font-semibold">—</div>
+                </div>
+                <div class="bg-white/10 rounded p-1.5">
+                  <div class="opacity-70 mb-0.5">GCS</div>
+                  <div id="r-pct-gcs" class="font-semibold">—</div>
+                </div>
+              </div>
+            </div>
+
+            <p class="text-xs text-slate-400 mt-3">
+              Preços de referência (us-central1, fev/2026):
+              <a href="https://cloud.google.com/vertex-ai/pricing#matchingengine" target="_blank" class="ref-link">Vector Search</a> ·
+              <a href="https://cloud.google.com/vertex-ai/generative-ai/pricing" target="_blank" class="ref-link">Generative AI</a> ·
+              <a href="https://cloud.google.com/storage/pricing" target="_blank" class="ref-link">Cloud Storage</a>.
+              Os valores reais podem variar por região, descontos contratuais e uso exato.
+            </p>
+          </div>
+        </div>
+
+      </main>
+    </div>
+
+    <footer class="flex-shrink-0 w-full bg-[var(--nav-bg)] border-t border-white/10 py-4 text-center text-slate-400 text-sm">
+      <p>Vertex AI — Referência técnica · Fonte: <a href="https://cloud.google.com/vertex-ai/docs" target="_blank" class="ref-link">cloud.google.com/vertex-ai/docs</a></p>
+    </footer>
+
+    <script>
+      function showPanel(sectionId) {
+        document.querySelectorAll(".content-panel").forEach((el) => el.classList.remove("active"));
+        const panel = document.getElementById("panel-" + sectionId);
+        if (panel) panel.classList.add("active");
+        document.querySelectorAll(".nav-link").forEach((link) => {
+          link.classList.toggle("active", link.getAttribute("data-section") === sectionId);
+        });
+        if (sectionId === "custos") calcCustos();
+      }
+
+      function fmt(v) {
+        if (v === null || isNaN(v)) return "—";
+        return "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      function fmtGiB(bytes) {
+        const gib = bytes / (1024 ** 3);
+        if (gib < 0.001) return (bytes / (1024 ** 2)).toFixed(2) + " MiB";
+        return gib.toFixed(3) + " GiB";
+      }
+      function pct(part, total) {
+        if (!total) return "0%";
+        return (part / total * 100).toFixed(1) + "%";
+      }
+
+      function calcCustos() {
+        // 1. Índice — construção
+        const numVec    = parseFloat(document.getElementById("c-num-vectors").value) || 0;
+        const dims      = parseFloat(document.getElementById("c-dims").value) || 0;
+        const updates   = parseFloat(document.getElementById("c-updates").value) || 0;
+        const dataBytes = numVec * dims * 4;
+        const dataGiB   = dataBytes / (1024 ** 3);
+        const buildCost = dataGiB * 3.00 * updates;
+        document.getElementById("r-data-size").textContent = fmtGiB(dataBytes);
+        document.getElementById("r-build-cost").textContent = fmt(buildCost);
+
+        // 2. Serving
+        const machinePrice = parseFloat(document.getElementById("c-machine").value) || 0;
+        const replicas     = parseFloat(document.getElementById("c-replicas").value) || 0;
+        const hours        = parseFloat(document.getElementById("c-hours").value) || 0;
+        const serveCost    = machinePrice * replicas * hours;
+        document.getElementById("r-serve-cost").textContent = fmt(serveCost);
+
+        // 3. Embedding
+        const embPrice      = parseFloat(document.getElementById("c-emb-model").value) || 0;
+        const tokensPerDoc  = parseFloat(document.getElementById("c-tokens-per-doc").value) || 0;
+        const docsMonth     = parseFloat(document.getElementById("c-docs-month").value) || 0;
+        const embCost       = (docsMonth * tokensPerDoc / 1000) * embPrice;
+        document.getElementById("r-emb-cost").textContent = fmt(embCost);
+
+        // 4. LLM
+        const llmPrices = document.getElementById("c-llm").value.split(",").map(Number);
+        const llmIn     = llmPrices[0]; // por 1M tokens
+        const llmOut    = llmPrices[1];
+        const reqs      = parseFloat(document.getElementById("c-reqs").value) || 0;
+        const inTok     = parseFloat(document.getElementById("c-in-tokens").value) || 0;
+        const outTok    = parseFloat(document.getElementById("c-out-tokens").value) || 0;
+        const llmInCost  = (reqs * inTok / 1_000_000) * llmIn;
+        const llmOutCost = (reqs * outTok / 1_000_000) * llmOut;
+        document.getElementById("r-llm-in").textContent  = fmt(llmInCost);
+        document.getElementById("r-llm-out").textContent = fmt(llmOutCost);
+
+        // 5. GCS
+        const gcsGB   = parseFloat(document.getElementById("c-gcs-gb").value) || 0;
+        const gcsCost = gcsGB * 0.020;
+        document.getElementById("r-gcs-cost").textContent = fmt(gcsCost);
+
+        // Total
+        const total = buildCost + serveCost + embCost + llmInCost + llmOutCost + gcsCost;
+        document.getElementById("r-total").textContent = fmt(total);
+
+        // Percentuais
+        const llmTotal = llmInCost + llmOutCost;
+        document.getElementById("r-pct-build").textContent = pct(buildCost, total);
+        document.getElementById("r-pct-serve").textContent = pct(serveCost, total);
+        document.getElementById("r-pct-emb").textContent   = pct(embCost, total);
+        document.getElementById("r-pct-llm").textContent   = pct(llmTotal, total);
+        document.getElementById("r-pct-gcs").textContent   = pct(gcsCost, total);
+      }
+
+      window.addEventListener("load", calcCustos);
+    </script>
+  </body>
+</html>
