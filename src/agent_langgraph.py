@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(REPO_ROOT / ".env")
 
 from langchain_core.tools import tool
-from langchain_google_vertexai import ChatVertexAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
 
 from src.tools.vertex_rag_tool import vertex_rag_retrieval
@@ -43,7 +43,7 @@ def build_agent():
     if not project:
         raise ValueError("GOOGLE_CLOUD_PROJECT não definido no .env")
 
-    llm = ChatVertexAI(
+    llm = ChatGoogleGenerativeAI(
         model="gemini-2.0-flash-001",
         project=project,
         location=location,
@@ -58,7 +58,7 @@ def build_agent():
         "Cite as fontes (documento e página). Explique o raciocínio quando relevante."
     )
 
-    agent = create_react_agent(llm, tools, state_modifier=system_prompt)
+    agent = create_react_agent(llm, tools, prompt=system_prompt)
     return agent
 
 

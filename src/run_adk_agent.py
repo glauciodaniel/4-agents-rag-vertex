@@ -14,8 +14,8 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from dotenv import load_dotenv
 load_dotenv(REPO_ROOT / ".env")
-
-required = ("GOOGLE_CLOUD_PROJECT", "VECTOR_SEARCH_INDEX_ENDPOINT_NAME", "GEMINI_API_KEY")
+# antes era required = ("GOOGLE_CLOUD_PROJECT", "VECTOR_SEARCH_INDEX_ENDPOINT_NAME", "GEMINI_API_KEY")
+required = ("GOOGLE_CLOUD_PROJECT", "VECTOR_SEARCH_INDEX_ENDPOINT_NAME", "VECTOR_SEARCH_DEPLOYED_INDEX_ID", "GEMINI_API_KEY")
 missing = [v for v in required if not os.getenv(v)]
 if missing:
     print(f"Defina no .env: {', '.join(missing)}. Rode o script de ingestão antes de consultar.", file=sys.stderr)
@@ -23,12 +23,27 @@ if missing:
 
 from src.agent_adk import root_agent
 
+# adicionei essa função para extrair o texto da resposta do agente
+def _extract_text(out) -> str:
+    """Extrai texto da resposta do agente (objeto com .text, dict com parts, ou fallback str)."""
+    if out is None:
+        return ""
+    text = getattr(out, "text", None)
+    if text and isinstance(text, str):
+        return text
+    if isinstance(out, dict):
+        parts = out.get("parts") or []
+        texts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("text")]
+        if texts:
+            return " ".join(texts).strip()
+    return str(out)
+
 
 def _get_response_sync(user_message: str) -> str:
     """Obtém resposta do agente (tenta generate_response ou session/stream)."""
     if hasattr(root_agent, "generate_response"):
         out = root_agent.generate_response(user_message)
-        return getattr(out, "text", None) or str(out)
+        return _extract_text(out)
     # Fallback: usar AdkApp com stream e coletar último conteúdo
     try:
         from vertexai.agent_engines import AdkApp
@@ -37,7 +52,7 @@ def _get_response_sync(user_message: str) -> str:
             last_text = ""
             async for event in app.async_stream_query(user_id="cli", message=user_message):
                 if isinstance(event, dict) and event.get("content"):
-                    last_text = event["content"] if isinstance(event["content"], str) else str(event["content"])
+                    last_text = _extract_text(event["content"])
             return last_text
         return asyncio.run(_run())
     except Exception as e:

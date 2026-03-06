@@ -10,6 +10,7 @@ google-genai>=0.3.0
 # LangGraph & LangChain
 langgraph>=0.0.40
 langchain>=0.1.0
+langchain-google-genai>=4.0.0
 langchain-google-vertexai>=0.0.6
 
 # Frontend
@@ -20,6 +21,10 @@ google-generativeai>=0.8.0
 
 # PDF e chunking
 pypdf>=4.0.0
+
+# Hybrid search (BM25)
+rank_bm25>=0.2.2
+numpy>=1.24.0
 
 # Utils
 python-dotenv>=1.0.0

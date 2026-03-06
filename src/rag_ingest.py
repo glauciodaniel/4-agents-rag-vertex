@@ -183,6 +183,12 @@ def ingest_chunks_to_vector_search(
 
     chunk_map = {c[0]: c[1] for c in chunks}
     save_chunks(chunk_map, merge=True)
+    # Índice BM25 para hybrid search (busca léxica + semântica)
+    try:
+        from src.bm25_index import build_and_save as bm25_build_and_save
+        bm25_build_and_save(chunk_map, merge=True)
+    except Exception:
+        pass  # opcional: se rank_bm25 não estiver instalado ou GCS falhar, ingestão segue
     return len(chunks)
 
 

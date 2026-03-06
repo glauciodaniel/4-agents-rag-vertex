@@ -48,14 +48,7 @@ Thumbs.db
 nul
 
 
-docs/*.md
-!docs/LAB-GUIADO-01-DETECCAO-RECUSA-LLM.md
 
-
-LAB-DESAFIO.md
-
-docs/*.md
-!lab_rag_chromadb_1h.md
 
 # scripts/*.py desfeito para versionar scripts do projeto
 # !script/
